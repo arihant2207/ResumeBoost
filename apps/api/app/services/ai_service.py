@@ -4,9 +4,11 @@ import re
 from pathlib import Path
 from string import Template
 
-import anthropic
-from anthropic import APIError, APIConnectionError, APITimeoutError, RateLimitError
 from fastapi import HTTPException
+from google import genai
+from google.genai import types
+from google.genai.errors import APIError
+from pydantic import BaseModel
 
 from app.config import settings
 from app.schemas.analysis import ResumeAnalysisResponse
@@ -17,7 +19,20 @@ PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "resume_analy
 
 
 class AIServiceError(Exception):
-    """Raised when Claude analysis fails."""
+    """Raised when Gemini analysis fails."""
+
+
+class GeminiResumeAnalysis(BaseModel):
+    """
+    Internal schema for Gemini response (avoids validation errors in google-genai
+    due to 'examples' or other metadata fields in ResumeAnalysisResponse).
+    """
+    match_percentage: int
+    matched_skills: list[str]
+    missing_skills: list[str]
+    ats_keywords: list[str]
+    strengths: list[str]
+    improvement_suggestions: list[str]
 
 
 def _load_prompt_template() -> str:
@@ -44,22 +59,22 @@ def _extract_json_payload(text: str) -> dict:
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        logger.warning("Failed to parse Claude JSON: %s", exc)
-        raise AIServiceError("Claude returned invalid JSON.") from exc
+        logger.warning("Failed to parse Gemini JSON: %s", exc)
+        raise AIServiceError("Gemini returned invalid JSON.") from exc
 
 
-def _get_client() -> anthropic.Anthropic:
-    if not settings.anthropic_api_key:
+def _get_client() -> genai.Client:
+    if not settings.gemini_api_key:
         raise HTTPException(
             status_code=503,
             detail={
                 "error": {
                     "code": "AI_NOT_CONFIGURED",
-                    "message": "ANTHROPIC_API_KEY is not set. Add it to your .env file.",
+                    "message": "GEMINI_API_KEY is not set. Add it to your .env file.",
                 }
             },
         )
-    return anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    return genai.Client(api_key=settings.gemini_api_key)
 
 
 def analyze_resume_for_job(
@@ -69,62 +84,59 @@ def analyze_resume_for_job(
     session_id: str,
 ) -> ResumeAnalysisResponse:
     """
-    Send resume + job description to Claude and return structured ATS analysis.
+    Send resume + job description to Gemini and return structured ATS analysis.
     Analysis only — no resume rewriting.
     """
     prompt = _build_prompt(resume_text, job_description)
     client = _get_client()
 
     logger.info(
-        "Starting Claude analysis session_id=%s model=%s resume_chars=%d jd_chars=%d",
+        "Starting Gemini analysis session_id=%s model=%s resume_chars=%d jd_chars=%d",
         session_id,
-        settings.anthropic_model,
+        settings.gemini_model,
         len(resume_text),
         len(job_description),
     )
 
     try:
-        message = client.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=settings.anthropic_max_tokens,
-            temperature=0,
-            messages=[{"role": "user", "content": prompt}],
+        response = client.models.generate_content(
+            model=settings.gemini_model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=GeminiResumeAnalysis,
+                temperature=0.0,
+            ),
         )
-    except RateLimitError as exc:
-        logger.error("Claude rate limit session_id=%s: %s", session_id, exc)
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "error": {
-                    "code": "AI_RATE_LIMITED",
-                    "message": "Claude API rate limit exceeded. Try again shortly.",
-                }
-            },
-        ) from exc
-    except (APIConnectionError, APITimeoutError) as exc:
-        logger.error("Claude connection error session_id=%s: %s", session_id, exc)
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "error": {
-                    "code": "AI_UNAVAILABLE",
-                    "message": "Could not reach Claude API. Check your network and try again.",
-                }
-            },
-        ) from exc
     except APIError as exc:
-        logger.error("Claude API error session_id=%s: %s", session_id, exc)
+        logger.error("Gemini API error session_id=%s: status_code=%s message=%s", session_id, exc.code, str(exc))
+        if exc.code == 429:
+            status_code = 429
+            error_code = "AI_RATE_LIMITED"
+            error_message = "Gemini API rate limit exceeded. Try again shortly."
+        elif exc.code in (401, 403):
+            status_code = 503
+            error_code = "AI_NOT_CONFIGURED"
+            error_message = "Gemini API authentication failed. Check your API key."
+        elif exc.code and exc.code >= 500:
+            status_code = 502
+            error_code = "AI_UNAVAILABLE"
+            error_message = "Gemini API is currently unavailable or returned a server error."
+        else:
+            status_code = 502
+            error_code = "AI_API_ERROR"
+            error_message = f"Gemini API error: {str(exc)}"
         raise HTTPException(
-            status_code=502,
+            status_code=status_code,
             detail={
                 "error": {
-                    "code": "AI_API_ERROR",
-                    "message": "Claude API returned an error.",
+                    "code": error_code,
+                    "message": error_message,
                 }
             },
         ) from exc
     except Exception as exc:
-        logger.exception("Unexpected Claude error session_id=%s", session_id)
+        logger.exception("Unexpected Gemini error session_id=%s", session_id)
         raise HTTPException(
             status_code=502,
             detail={
@@ -135,43 +147,32 @@ def analyze_resume_for_job(
             },
         ) from exc
 
-    if not message.content:
+    raw_output = response.text
+    if not raw_output or not raw_output.strip():
         raise HTTPException(
             status_code=502,
             detail={
                 "error": {
                     "code": "AI_EMPTY_RESPONSE",
-                    "message": "Claude returned an empty response.",
+                    "message": "Gemini returned an empty response.",
                 }
             },
         )
 
-    text_blocks = [block.text for block in message.content if block.type == "text"]
-    raw_output = "\n".join(text_blocks).strip()
-    if not raw_output:
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "error": {
-                    "code": "AI_EMPTY_RESPONSE",
-                    "message": "Claude returned no text content.",
-                }
-            },
-        )
-
-    usage = message.usage
+    # Note: Usage metadata can be optionally logged if available from google-genai
+    usage = getattr(response, "usage_metadata", None)
     logger.info(
-        "Claude analysis complete session_id=%s input_tokens=%s output_tokens=%s",
+        "Gemini analysis complete session_id=%s input_tokens=%s output_tokens=%s",
         session_id,
-        getattr(usage, "input_tokens", "?"),
-        getattr(usage, "output_tokens", "?"),
+        getattr(usage, "prompt_token_count", "?") if usage else "?",
+        getattr(usage, "candidates_token_count", "?") if usage else "?",
     )
 
     try:
         payload = _extract_json_payload(raw_output)
         return ResumeAnalysisResponse.model_validate(payload)
     except AIServiceError as exc:
-        logger.error("Invalid Claude JSON session_id=%s", session_id)
+        logger.error("Invalid Gemini JSON session_id=%s", session_id)
         raise HTTPException(
             status_code=502,
             detail={
@@ -188,7 +189,8 @@ def analyze_resume_for_job(
             detail={
                 "error": {
                     "code": "AI_INVALID_RESPONSE",
-                    "message": "Claude response did not match the expected schema.",
+                    "message": "Gemini response did not match the expected schema.",
                 }
             },
         ) from exc
+

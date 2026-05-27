@@ -14,17 +14,17 @@ router = APIRouter(tags=["analysis"])
 @router.post(
     "/analyze-session/{session_id}",
     response_model=ResumeAnalysisResponse,
-    summary="Analyze resume against job description (Claude)",
+    summary="Analyze resume against job description (Gemini)",
     description=(
         "Loads the resume and job description linked to an existing session, "
-        "runs Claude ATS analysis, and returns structured insights. "
+        "runs Google Gemini ATS analysis, and returns structured insights. "
         "Does not rewrite the resume or generate a PDF."
     ),
     responses={
         404: {"description": "Session or linked data not found"},
         422: {"description": "Resume or job description has no analyzable text"},
-        429: {"description": "Claude rate limit"},
-        502: {"description": "Claude API or response parsing error"},
+        429: {"description": "Gemini rate limit"},
+        502: {"description": "Gemini API or response parsing error"},
         503: {"description": "AI not configured or unavailable"},
     },
 )

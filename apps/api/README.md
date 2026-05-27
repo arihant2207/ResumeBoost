@@ -94,7 +94,7 @@ Open **http://localhost:3000**, upload a resume, paste a JD, and click **Generat
 | GET | `/api/v1/job-descriptions/{id}` | Get stored JD |
 | POST | `/api/v1/sessions` | Link resume + JD, return combined JSON |
 | GET | `/api/v1/sessions/{id}` | Get session with full payload |
-| POST | `/api/v1/analyze-session/{session_id}` | Claude ATS analysis (Phase 3A) |
+| POST | `/api/v1/analyze-session/{session_id}` | Gemini ATS analysis (Phase 3A) |
 
 ### Example: upload resume
 
@@ -121,7 +121,7 @@ curl -X POST "http://localhost:8000/api/v1/sessions" ^
 
 ### Example: analyze session (Phase 3A)
 
-Requires `ANTHROPIC_API_KEY` in `.env`.
+Requires `GEMINI_API_KEY` in `.env`.
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/analyze-session/<session-uuid>"
@@ -129,14 +129,13 @@ curl -X POST "http://localhost:8000/api/v1/analyze-session/<session-uuid>"
 
 ---
 
-## Phase 3A — Claude analysis
+## Phase 3A — Gemini analysis
 
 Set in `.env`:
 
 ```
-ANTHROPIC_API_KEY=sk-ant-api03-...
-ANTHROPIC_MODEL=claude-sonnet-4-20250514
-ANTHROPIC_MAX_TOKENS=4096
+GEMINI_API_KEY=AIzaSyDfuA-...
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 **Swagger test flow**

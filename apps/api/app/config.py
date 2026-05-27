@@ -78,7 +78,7 @@ def _bootstrap_env_file() -> dict[str, str]:
         if value:
             os.environ[key] = value
         else:
-            # Skip empty lines like ANTHROPIC_API_KEY= (do not poison os.environ)
+            # Skip empty lines like GEMINI_API_KEY= (do not poison os.environ)
             os.environ.pop(key, None)
 
     return parsed
@@ -98,12 +98,11 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     max_upload_bytes: int = 10 * 1024 * 1024  # 10 MB
 
-    # Env var ANTHROPIC_API_KEY maps automatically (no validation_alias needed)
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-4-20250514"
-    anthropic_max_tokens: int = 4096
+    # Env var GEMINI_API_KEY maps automatically (no validation_alias needed)
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
 
-    @field_validator("anthropic_api_key", mode="before")
+    @field_validator("gemini_api_key", mode="before")
     @classmethod
     def strip_api_key(cls, value: object) -> str:
         if value is None:
@@ -120,30 +119,30 @@ settings = Settings()
 
 def _log_env_diagnostics() -> None:
     """Startup diagnostics — lengths only, never secret values."""
-    from_env = os.getenv("ANTHROPIC_API_KEY")
+    from_env = os.getenv("GEMINI_API_KEY")
 
     logger.info("ENV file path: %s", ENV_FILE)
     logger.info("ENV file exists: %s", ENV_FILE.is_file())
     if ENV_FILE.is_file():
         logger.info("ENV file size (bytes): %d", ENV_FILE.stat().st_size)
 
-    logger.info("settings.anthropic_api_key: %s", _mask_secret(settings.anthropic_api_key))
-    logger.info("os.getenv('ANTHROPIC_API_KEY'): %s", _mask_secret(from_env))
+    logger.info("settings.gemini_api_key: %s", _mask_secret(settings.gemini_api_key))
+    logger.info("os.getenv('GEMINI_API_KEY'): %s", _mask_secret(from_env))
 
     # Variables parsed directly from disk (independent of pydantic)
-    anthropic_from_file = {
-        k: v for k, v in _PARSED_ENV.items() if k.startswith("ANTHROPIC")
+    gemini_from_file = {
+        k: v for k, v in _PARSED_ENV.items() if k.startswith("GEMINI")
     }
-    if anthropic_from_file:
-        for key in sorted(anthropic_from_file):
-            logger.info("parsed from .env - %s length: %d", key, len(anthropic_from_file[key]))
+    if gemini_from_file:
+        for key in sorted(gemini_from_file):
+            logger.info("parsed from .env - %s length: %d", key, len(gemini_from_file[key]))
     else:
-        logger.info("parsed from .env - no ANTHROPIC_* keys found")
+        logger.info("parsed from .env - no GEMINI_* keys found")
 
-    key_line = _PARSED_ENV.get("ANTHROPIC_API_KEY")
+    key_line = _PARSED_ENV.get("GEMINI_API_KEY")
     if key_line is not None and len(key_line) == 0:
         logger.warning(
-            "On disk, ANTHROPIC_API_KEY= has an empty value (line is 'KEY=' only). "
+            "On disk, GEMINI_API_KEY= has an empty value (line is 'KEY=' only). "
             "Save apps/api/.env in your editor so the key is on the same line, then restart."
         )
 
@@ -151,4 +150,4 @@ def _log_env_diagnostics() -> None:
 def log_settings_summary() -> None:
     """Log non-secret config diagnostics at startup."""
     _log_env_diagnostics()
-    logger.info("ANTHROPIC_API_KEY effective length: %d", len(settings.anthropic_api_key))
+    logger.info("GEMINI_API_KEY effective length: %d", len(settings.gemini_api_key))
