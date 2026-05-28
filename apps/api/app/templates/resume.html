@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ contact.name or "Resume" }}</title>
+    <style>
+        @page {
+            size: letter;
+            margin: 0.75in;
+
+            @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-family: Arial, sans-serif;
+                font-size: 8pt;
+                color: #64748b;
+            }
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #1e293b;
+            line-height: 1.4;
+            font-size: 10pt;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1,
+        h2,
+        h3 {
+            margin: 0;
+            color: #0f172a;
+        }
+
+        a {
+            color: #1e293b;
+            text-decoration: none;
+        }
+
+        /* Header block */
+        .header {
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .name {
+            font-size: 22pt;
+            font-weight: bold;
+            letter-spacing: -0.5px;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+
+        .contact-info {
+            font-size: 9pt;
+            color: #475569;
+        }
+
+        .contact-info span:not(:last-child)::after {
+            content: " • ";
+            margin: 0 6px;
+            color: #94a3b8;
+        }
+
+        /* Section layout */
+        .section {
+            margin-top: 16px;
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            font-size: 11pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1.5px solid #0f172a;
+            padding-bottom: 2px;
+            margin-bottom: 8px;
+            page-break-after: avoid;
+        }
+
+        /* Professional Summary */
+        .summary-text {
+            font-size: 9.5pt;
+            text-align: justify;
+            margin: 0;
+        }
+
+        /* Experience and Projects item design */
+        .item {
+            margin-bottom: 12px;
+            page-break-inside: avoid;
+        }
+
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 10pt;
+            margin-bottom: 2px;
+        }
+
+        .item-subheader {
+            display: flex;
+            justify-content: space-between;
+            font-style: italic;
+            font-size: 9.5pt;
+            color: #475569;
+            margin-bottom: 4px;
+        }
+
+        .bullets {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .bullets li {
+            margin-bottom: 3px;
+            font-size: 9.5pt;
+        }
+
+        /* Skills block design */
+        .skills-list {
+            margin: 0;
+            font-size: 9.5pt;
+        }
+
+        .skills-group {
+            margin-bottom: 4px;
+        }
+
+        .skills-label {
+            font-weight: bold;
+        }
+
+        /* Education block design */
+        .education-item {
+            margin-bottom: 8px;
+            page-break-inside: avoid;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Header Block -->
+    <div class="header">
+        <div class="name">{{ contact.name }}</div>
+        <div class="contact-info">
+            {% if contact.email %}<span>{{ contact.email }}</span>{% endif %}
+            {% if contact.phone %}<span>{{ contact.phone }}</span>{% endif %}
+            {% if contact.location %}<span>{{ contact.location }}</span>{% endif %}
+            {% if contact.linkedin %}<span>{{ contact.linkedin }}</span>{% endif %}
+            {% if contact.github %}<span>{{ contact.github }}</span>{% endif %}
+        </div>
+    </div>
+
+    <!-- Summary Section -->
+    {% if summary %}
+    <div class="section">
+        <div class="section-title">Professional Summary</div>
+        <p class="summary-text">{{ summary }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Work Experience Section -->
+    {% if experience %}
+    <div class="section">
+        <div class="section-title">Professional Experience</div>
+        {% for exp in experience %}
+        <div class="item">
+            <div class="item-header">
+                <span>{{ exp.company }}</span>
+                <span>{% if exp.location %}{{ exp.location }}{% endif %}</span>
+            </div>
+            <div class="item-subheader">
+                <span>{{ exp.title }}</span>
+                <span>{{ exp.start_date }} – {{ exp.end_date }}</span>
+            </div>
+            {% if exp.bullets %}
+            <ul class="bullets">
+                {% for bullet in exp.bullets %}
+                <li>{{ bullet }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Projects Section -->
+    {% if projects %}
+    <div class="section">
+        <div class="section-title">Projects</div>
+        {% for proj in projects %}
+        <div class="item">
+            <div class="item-header">
+                <span>{{ proj.name }}</span>
+                <span>{% if proj.technologies %}{{ proj.technologies | join(', ') }}{% endif %}</span>
+            </div>
+            <div class="summary-text" style="margin-top: 2px;">
+                {{ proj.description }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Technical Skills Section -->
+    {% if skills and (skills.technical or skills.soft) %}
+    <div class="section">
+        <div class="section-title">Skills</div>
+        <div class="skills-list">
+            {% if skills.technical %}
+            <div class="skills-group">
+                <span class="skills-label">Technical Skills:</span> {{ skills.technical | join(', ') }}
+            </div>
+            {% endif %}
+            {% if skills.soft %}
+            <div class="skills-group">
+                <span class="skills-label">Soft Skills:</span> {{ skills.soft | join(', ') }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Education Section -->
+    {% if education %}
+    <div class="section">
+        <div class="section-title">Education</div>
+        {% for edu in education %}
+        <div class="education-item">
+            <div class="item-header">
+                <span>{{ edu.institution }}</span>
+                <span>{{ edu.graduation_date }}</span>
+            </div>
+            <div class="item-subheader">
+                <span>{{ edu.degree }}</span>
+                <span></span>
+            </div>
+            {% if edu.details %}
+            <ul class="bullets" style="margin-top: 2px;">
+                {% for detail in edu.details %}
+                <li>{{ detail }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Certifications Section -->
+    {% if certifications %}
+    <div class="section">
+        <div class="section-title">Certifications</div>
+        <ul class="bullets">
+            {% for cert in certifications %}
+            <li>{{ cert }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+</body>
+
+</html>

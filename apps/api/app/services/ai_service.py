@@ -305,7 +305,12 @@ def optimize_resume_for_job(
 
     try:
         payload = _extract_json_payload(raw_output)
-        return OptimizeSessionResponse.model_validate(payload)
+        validated = OptimizeSessionResponse.model_validate(payload)
+        from app.services.storage import store
+        session = store.sessions.get(session_id)
+        if session:
+            session.optimized_data = validated
+        return validated
     except AIServiceError as exc:
         logger.error("Invalid Gemini JSON session_id=%s", session_id)
         raise HTTPException(
