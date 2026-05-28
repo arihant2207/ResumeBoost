@@ -272,16 +272,17 @@ def optimize_resume_for_job(
             },
         ) from exc
     except Exception as exc:
-        logger.exception("Unexpected Gemini error session_id=%s", session_id)
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "error": {
-                    "code": "AI_ERROR",
-                    "message": "Unexpected error during AI optimization.",
-                }
-            },
-        ) from exc
+    logger.exception("Unexpected Gemini error session_id=%s", session_id)
+
+    raise HTTPException(
+        status_code=502,
+        detail={
+            "error": {
+                "code": "AI_ERROR",
+                "message": str(exc),
+            }
+        },
+    ) from exc
 
     raw_output = response.text
     if not raw_output or not raw_output.strip():
