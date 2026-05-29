@@ -7,7 +7,6 @@ from string import Template
 from fastapi import HTTPException
 from google import genai
 from google.genai import types
-from google.genai.errors import APIError
 from pydantic import BaseModel
 
 from app.config import settings
@@ -73,7 +72,7 @@ def _get_client() -> genai.Client:
             detail={
                 "error": {
                     "code": "AI_NOT_CONFIGURED",
-                    "message": "GEMINI_API_KEY is not set. Add it to your .env file.",
+                    "message": "GEMINI_API_KEY is not set.",
                 }
             },
         )
@@ -106,46 +105,17 @@ def analyze_resume_for_job(
             model=settings.gemini_model,
             contents=prompt,
             config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=GeminiResumeAnalysis,
                 temperature=0.0,
             ),
         )
-    except APIError as exc:
-        logger.error("Gemini API error session_id=%s: status_code=%s message=%s", session_id, exc.code, str(exc))
-        if exc.code == 429:
-            status_code = 429
-            error_code = "AI_RATE_LIMITED"
-            error_message = "Gemini API rate limit exceeded. Try again shortly."
-        elif exc.code in (401, 403):
-            status_code = 503
-            error_code = "AI_NOT_CONFIGURED"
-            error_message = "Gemini API authentication failed. Check your API key."
-        elif exc.code and exc.code >= 500:
-            status_code = 502
-            error_code = "AI_UNAVAILABLE"
-            error_message = "Gemini API is currently unavailable or returned a server error."
-        else:
-            status_code = 502
-            error_code = "AI_API_ERROR"
-            error_message = f"Gemini API error: {str(exc)}"
-        raise HTTPException(
-            status_code=status_code,
-            detail={
-                "error": {
-                    "code": error_code,
-                    "message": error_message,
-                }
-            },
-        ) from exc
     except Exception as exc:
-        logger.exception("Unexpected Gemini error session_id=%s", session_id)
+        logger.exception("Gemini analysis error session_id=%s", session_id)
         raise HTTPException(
             status_code=502,
             detail={
                 "error": {
-                    "code": "AI_ERROR",
-                    "message": "Unexpected error during AI analysis.",
+                    "code": "AI_API_ERROR",
+                    "message": str(exc),
                 }
             },
         ) from exc
@@ -162,7 +132,6 @@ def analyze_resume_for_job(
             },
         )
 
-    # Note: Usage metadata can be optionally logged if available from google-genai
     usage = getattr(response, "usage_metadata", None)
     logger.info(
         "Gemini analysis complete session_id=%s input_tokens=%s output_tokens=%s",
@@ -196,7 +165,6 @@ def analyze_resume_for_job(
                 }
             },
         ) from exc
-
 
 
 def _load_optimize_prompt_template() -> str:
@@ -239,50 +207,20 @@ def optimize_resume_for_job(
             model=settings.gemini_model,
             contents=prompt,
             config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=OptimizeSessionResponse,
                 temperature=0.0,
             ),
         )
-    except APIError as exc:
-        logger.error("Gemini API error session_id=%s: status_code=%s message=%s", session_id, exc.code, str(exc))
-        if exc.code == 429:
-            status_code = 429
-            error_code = "AI_RATE_LIMITED"
-            error_message = "Gemini API rate limit exceeded. Try again shortly."
-        elif exc.code in (401, 403):
-            status_code = 503
-            error_code = "AI_NOT_CONFIGURED"
-            error_message = "Gemini API authentication failed. Check your API key."
-        elif exc.code and exc.code >= 500:
-            status_code = 502
-            error_code = "AI_UNAVAILABLE"
-            error_message = "Gemini API is currently unavailable or returned a server error."
-        else:
-            status_code = 502
-            error_code = "AI_API_ERROR"
-            error_message = f"Gemini API error: {str(exc)}"
+    except Exception as exc:
+        logger.exception("Unexpected Gemini error session_id=%s", session_id)
         raise HTTPException(
-            status_code=status_code,
+            status_code=502,
             detail={
                 "error": {
-                    "code": error_code,
-                    "message": error_message,
+                    "code": "AI_ERROR",
+                    "message": str(exc),
                 }
             },
         ) from exc
-    except Exception as exc:
-    logger.exception("Unexpected Gemini error session_id=%s", session_id)
-
-    raise HTTPException(
-        status_code=502,
-        detail={
-            "error": {
-                "code": "AI_ERROR",
-                "message": str(exc),
-            }
-        },
-    ) from exc
 
     raw_output = response.text
     if not raw_output or not raw_output.strip():

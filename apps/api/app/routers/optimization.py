@@ -1,38 +1,28 @@
-import logging
-
-from fastapi import APIRouter
-
-from app.schemas.optimization import OptimizeSessionResponse
-from app.services.ai_service import optimize_resume_for_job
-from app.services.session_loader import load_session_bundle
-
-logger = logging.getLogger(__name__)
-
-router = APIRouter(tags=["optimization"])
+from pydantic import BaseModel, Field
 
 
-@router.post(
-    "/optimize-session/{session_id}",
-    response_model=OptimizeSessionResponse,
-    summary="Optimize resume summary, experience, and projects tailored to a job description (Gemini)",
-    description=(
-        "Loads the resume and job description linked to an existing session, "
-        "runs Google Gemini to rewrite the professional summary, projects, and work experience "
-        "sections tailored to the job description, and returns the optimized sections."
-    ),
-    responses={
-        404: {"description": "Session or linked data not found"},
-        422: {"description": "Resume or job description has no analyzable text"},
-        429: {"description": "Gemini rate limit"},
-        502: {"description": "Gemini API or response parsing error"},
-        503: {"description": "AI not configured or unavailable"},
-    },
-)
-def optimize_session(session_id: str) -> OptimizeSessionResponse:
-    bundle = load_session_bundle(session_id)
-    logger.info("Optimize session requested session_id=%s", session_id)
-    return optimize_resume_for_job(
-        bundle.resume,
-        bundle.job_description.raw_text,
-        session_id=session_id,
-    )
+class OptimizedProject(BaseModel):
+    name: str = Field(..., description="Project name (MUST match original name exactly)")
+    description: str = Field(..., description="Optimized description of the project and achievements")
+    technologies: list[str] = Field(default_factory=list, description="Technologies used in the project")
+
+
+class OptimizedExperience(BaseModel):
+    company: str = Field(..., description="Company name (MUST match original company exactly)")
+    title: str = Field(..., description="Job title")
+    location: str = Field(..., description="Original location")
+    start_date: str = Field(..., description="Start date (MUST match original start date exactly)")
+    end_date: str = Field(..., description="End date (MUST match original end date exactly)")
+    bullets: list[str] = Field(default_factory=list, description="Optimized accomplishment bullet points")
+
+
+class OptimizedSkills(BaseModel):
+    technical: list[str] = Field(default_factory=list, description="Technical skills reordered and highlighted to match JD keywords")
+    soft: list[str] = Field(default_factory=list, description="Soft skills from original resume")
+
+
+class OptimizeSessionResponse(BaseModel):
+    optimized_summary: str = Field(..., description="Optimized professional summary.")
+    optimized_projects: list[OptimizedProject] = Field(default_factory=list, description="Optimized projects section.")
+    optimized_experience: list[OptimizedExperience] = Field(default_factory=list, description="Optimized work experience section.")
+    optimized_skills: OptimizedSkills = Field(default_factory=OptimizedSkills, description="Skills reordered to prioritize JD-relevant keywords first.")

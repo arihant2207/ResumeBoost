@@ -44,7 +44,7 @@ router = APIRouter(tags=["pdf"])
 def generate_pdf(session_id: str) -> Response:
     # 1. Load the session bundle
     bundle = load_session_bundle(session_id)
-    
+
     # 2. Retrieve and validate optimized data
     optimized_data = getattr(bundle.session, "optimized_data", None)
     if not optimized_data:
@@ -57,7 +57,7 @@ def generate_pdf(session_id: str) -> Response:
                 }
             },
         )
-    
+
     try:
         if not isinstance(optimized_data, OptimizeSessionResponse):
             if isinstance(optimized_data, dict):
@@ -75,11 +75,40 @@ def generate_pdf(session_id: str) -> Response:
                 }
             },
         )
-    
+
     # 3. Combine original and optimized data
     resume = bundle.resume
-    contact_info = resume.structured_content.get("contact", {})
-    
+    structured = resume.structured_content
+    contact_info = structured.get("contact", {})
+
+    # --- Skills: prefer AI-optimized skills (JD-reordered), fallback to original ---
+    ai_skills = getattr(optimized_data, "optimized_skills", None)
+    if ai_skills and (ai_skills.technical or ai_skills.soft):
+        skills = {
+            "technical": ai_skills.technical,
+            "soft": ai_skills.soft,
+        }
+    else:
+        # Fallback: parse from original structured content
+        raw_skills = structured.get("skills", {})
+        if isinstance(raw_skills, list):
+            skills = {"technical": raw_skills, "soft": []}
+        elif isinstance(raw_skills, dict):
+            skills = {
+                "technical": raw_skills.get("technical", raw_skills.get("technical_skills", [])),
+                "soft": raw_skills.get("soft", raw_skills.get("soft_skills", [])),
+            }
+            if not skills["technical"] and not skills["soft"]:
+                all_vals = []
+                for v in raw_skills.values():
+                    if isinstance(v, list):
+                        all_vals.extend(v)
+                    elif isinstance(v, str):
+                        all_vals.append(v)
+                skills = {"technical": all_vals, "soft": []}
+        else:
+            skills = {"technical": [], "soft": []}
+
     resume_data = {
         "contact": contact_info,
         "summary": optimized_data.optimized_summary,
@@ -102,16 +131,17 @@ def generate_pdf(session_id: str) -> Response:
             }
             for proj in optimized_data.optimized_projects
         ],
-        "skills": resume.structured_content.get("skills", {}),
-        "education": resume.structured_content.get("education", []),
-        "certifications": resume.structured_content.get("certifications", []),
+        "skills": skills,
+        "education": structured.get("education", []),
+        "certifications": structured.get("certifications", []),
+        # achievements may be stored as a list of strings
+        "achievements": structured.get("achievements", []),
     }
-    
+
     # 4. Determine downloadable filename
     raw_name = contact_info.get("name", "").strip()
     filename = "Optimized_Resume.pdf"
     if raw_name:
-        # Split name and keep only first and last parts
         parts = [p for p in re.split(r"\s+", raw_name) if p]
         if len(parts) >= 2:
             firstname = re.sub(r"[^\w\-_]", "", parts[0])
@@ -122,9 +152,9 @@ def generate_pdf(session_id: str) -> Response:
             name_cleaned = re.sub(r"[^\w\-_]", "", parts[0])
             if name_cleaned:
                 filename = f"{name_cleaned}_Resume.pdf"
-                
+
     logger.info("Generating PDF for session_id=%s filename=%s", session_id, filename)
-    
+
     # 5. Render HTML and compile to PDF
     try:
         html_content = pdf_service.render_resume_to_html(resume_data)
@@ -139,7 +169,7 @@ def generate_pdf(session_id: str) -> Response:
                 }
             },
         )
-        
+
     # 6. Return response
     return Response(
         content=pdf_bytes,
