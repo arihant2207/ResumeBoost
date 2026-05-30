@@ -207,7 +207,7 @@ def optimize_resume_for_job(
             model=settings.gemini_model,
             contents=prompt,
             config=types.GenerateContentConfig(
-                temperature=0.0,
+                temperature=0.4,
             ),
         )
     except Exception as exc:
