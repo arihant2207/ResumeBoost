@@ -24,8 +24,8 @@
     }
 
     a {
-      color: #111;
-      text-decoration: underline;
+      color: #1a0dab;
+      text-decoration: none;
     }
 
     /* Header */
@@ -39,6 +39,12 @@
       font-weight: bold;
       text-transform: uppercase;
       letter-spacing: 1px;
+      margin-bottom: 2px;
+    }
+
+    .role-titles {
+      font-size: 8.5pt;
+      color: #444;
       margin-bottom: 3px;
     }
 
@@ -48,7 +54,7 @@
     }
 
     .contact-line a {
-      color: #333;
+      color: #1a0dab;
     }
 
     .sep {
@@ -120,8 +126,9 @@
 
     /* Bullets */
     .bullets {
-      margin: 0;
+      margin: 2px 0 0 0;
       padding-left: 13px;
+      list-style-type: disc;
     }
 
     .bullets li {
@@ -141,6 +148,11 @@
       font-size: 9pt;
     }
 
+    .proj-link {
+      font-size: 8pt;
+      color: #1a0dab;
+    }
+
     .proj-dates {
       font-size: 8pt;
       color: #444;
@@ -149,7 +161,7 @@
 
     .proj-tech {
       font-size: 8pt;
-      color: #333;
+      color: #444;
       font-style: italic;
       margin-bottom: 2px;
     }
@@ -176,10 +188,11 @@
       color: #333;
     }
 
-    /* Achievements / Certs */
+    /* Lists */
     .simple-list {
-      margin: 0;
+      margin: 2px 0 0 0;
       padding-left: 13px;
+      list-style-type: disc;
     }
 
     .simple-list li {
@@ -199,25 +212,22 @@
   <!-- HEADER -->
   <div class="header">
     <div class="name">{{ contact.name }}</div>
+    {% if role_titles %}
+    <div class="role-titles">{{ role_titles | join(' • ') }}</div>
+    {% endif %}
     <div class="contact-line">
       {% if contact.email %}<a href="mailto:{{ contact.email }}">{{ contact.email }}</a>{% endif %}
       {% if contact.phone %}<span class="sep">|</span><span>{{ contact.phone }}</span>{% endif %}
       {% if contact.location %}<span class="sep">|</span><span>{{ contact.location }}</span>{% endif %}
       {% if contact.linkedin %}
       <span class="sep">|</span>
-      {% if contact.linkedin.startswith('http') %}
-      <a href="{{ contact.linkedin }}">{{ contact.linkedin }}</a>
-      {% else %}
-      <a href="https://{{ contact.linkedin }}">{{ contact.linkedin }}</a>
-      {% endif %}
+      {% set li_url = contact.linkedin if contact.linkedin.startswith('http') else 'https://' + contact.linkedin %}
+      <a href="{{ li_url }}">LinkedIn</a>
       {% endif %}
       {% if contact.github %}
       <span class="sep">|</span>
-      {% if contact.github.startswith('http') %}
-      <a href="{{ contact.github }}">{{ contact.github }}</a>
-      {% else %}
-      <a href="https://{{ contact.github }}">{{ contact.github }}</a>
-      {% endif %}
+      {% set gh_url = contact.github if contact.github.startswith('http') else 'https://' + contact.github %}
+      <a href="{{ gh_url }}">GitHub</a>
       {% endif %}
     </div>
   </div>
@@ -230,10 +240,24 @@
   </div>
   {% endif %}
 
-  <!-- SKILLS -->
-  {% if skills and (skills.technical or skills.soft) %}
+  <!-- SKILLS — categorized if available, else flat -->
+  {% if skills %}
   <div class="section">
     <div class="section-title">Technical Skills</div>
+    {% if skills.categories and skills.categories | length > 0 %}
+    {% for cat in skills.categories %}
+    {% if cat.skills %}
+    <div class="skills-row">
+      <span class="skills-label">{{ cat.label }}:</span> {{ cat.skills | join(', ') }}
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% if skills.soft %}
+    <div class="skills-row">
+      <span class="skills-label">Soft Skills:</span> {{ skills.soft | join(', ') }}
+    </div>
+    {% endif %}
+    {% else %}
     {% if skills.technical %}
     <div class="skills-row">
       <span class="skills-label">Technical:</span> {{ skills.technical | join(' • ') }}
@@ -243,6 +267,7 @@
     <div class="skills-row">
       <span class="skills-label">Soft Skills:</span> {{ skills.soft | join(' • ') }}
     </div>
+    {% endif %}
     {% endif %}
   </div>
   {% endif %}
@@ -255,13 +280,17 @@
     <div class="exp-item">
       <div class="row">
         <span class="exp-company">{{ exp.company }}</span>
-        <span class="exp-dates">{{ exp.start_date }}{% if exp.end_date %} – {{ exp.end_date }}{% endif %}</span>
+        <span class="exp-dates">
+          {% if exp.start_date %}{{ exp.start_date }}{% endif %}
+          {% if exp.end_date %} – {{ exp.end_date }}{% endif %}
+        </span>
       </div>
-      {% if exp.title %}<div class="exp-title">{{ exp.title }}{% if exp.location %} · {{ exp.location }}{% endif %}
-      </div>{% endif %}
+      {% if exp.title %}
+      <div class="exp-title">{{ exp.title }}{% if exp.location %} · {{ exp.location }}{% endif %}</div>
+      {% endif %}
       {% if exp.bullets %}
       <ul class="bullets">
-        {% for b in exp.bullets %}<li>{{ b }}</li>{% endfor %}
+        {% for b in exp.bullets %}{% if b and b.strip() %}<li>{{ b }}</li>{% endif %}{% endfor %}
       </ul>
       {% endif %}
     </div>
@@ -276,13 +305,16 @@
     {% for proj in projects %}
     <div class="proj-item">
       <div class="row">
-        <span class="proj-name">
-          {% if proj.url %}<a href="{{ proj.url }}">{{ proj.name }}</a>
-          {% else %}{{ proj.name }}{% endif %}
+        <span>
+          <span class="proj-name">{{ proj.name }}</span>
+          {% if proj.url %}
+          &nbsp;|&nbsp;<a class="proj-link"
+            href="{{ proj.url if proj.url.startswith('http') else 'https://' + proj.url }}">GitHub</a>
+          {% endif %}
         </span>
         <span class="proj-dates">
-          {% if proj.start_date %}{{ proj.start_date }}{% if proj.end_date %} – {{ proj.end_date }}{% endif %}{% endif
-          %}
+          {% if proj.start_date %}{{ proj.start_date }}{% endif %}
+          {% if proj.end_date %} – {{ proj.end_date }}{% endif %}
         </span>
       </div>
       {% if proj.technologies %}
@@ -290,7 +322,7 @@
       {% endif %}
       {% if proj.bullets %}
       <ul class="bullets">
-        {% for b in proj.bullets %}<li>{{ b }}</li>{% endfor %}
+        {% for b in proj.bullets %}{% if b and b.strip() %}<li>{{ b }}</li>{% endif %}{% endfor %}
       </ul>
       {% elif proj.description %}
       <ul class="bullets">
@@ -318,7 +350,7 @@
       <div class="edu-degree">{{ edu.degree }}</div>
       {% if edu.details %}
       <ul class="bullets" style="margin-top:1px;">
-        {% for d in edu.details %}<li>{{ d }}</li>{% endfor %}
+        {% for d in edu.details %}{% if d and d.strip() %}<li>{{ d }}</li>{% endif %}{% endfor %}
       </ul>
       {% endif %}
     </div>
@@ -331,7 +363,7 @@
   <div class="section">
     <div class="section-title">Achievements</div>
     <ul class="simple-list">
-      {% for a in achievements %}<li>{{ a }}</li>{% endfor %}
+      {% for a in achievements %}{% if a and a.strip() %}<li>{{ a }}</li>{% endif %}{% endfor %}
     </ul>
   </div>
   {% endif %}
@@ -341,12 +373,13 @@
   <div class="section">
     <div class="section-title">Certifications</div>
     {% for cert in certifications %}
+    {% if cert and cert.strip() %}
     <div class="cert-item">
       {% if cert is mapping %}
-      {% if cert.url %}<a href="{{ cert.url }}">{{ cert.name }}</a>
-      {% else %}{{ cert.name }}{% endif %}
+      {% if cert.url %}<a href="{{ cert.url }}">{{ cert.name }}</a>{% else %}{{ cert.name }}{% endif %}
       {% else %}{{ cert }}{% endif %}
     </div>
+    {% endif %}
     {% endfor %}
   </div>
   {% endif %}

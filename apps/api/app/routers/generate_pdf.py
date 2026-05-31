@@ -7,8 +7,8 @@ from app.services.pdf_service import pdf_service, PDFGenerationError
 from app.services.session_loader import load_session_bundle
 
 logger = logging.getLogger(__name__)
-
 router = APIRouter(tags=["pdf"])
+
 
 @router.post(
     "/generate-pdf/{session_id}",
@@ -46,32 +46,34 @@ def generate_pdf(session_id: str) -> Response:
     structured = resume.structured_content
     contact_info = structured.get("contact", {})
 
-    # Skills — prefer AI optimized, fallback to original
+    # Skills — prefer AI optimized with categories
     ai_skills = getattr(optimized_data, "optimized_skills", None)
-    if ai_skills and (ai_skills.technical or ai_skills.soft):
-        skills = {"technical": ai_skills.technical, "soft": ai_skills.soft}
+    if ai_skills and (ai_skills.technical or ai_skills.soft or ai_skills.categories):
+        skills = {
+            "categories": [
+                {"label": cat.label, "skills": cat.skills}
+                for cat in (ai_skills.categories or [])
+                if cat.skills
+            ],
+            "technical": ai_skills.technical,
+            "soft": ai_skills.soft,
+        }
     else:
         raw_skills = structured.get("skills", {})
         if isinstance(raw_skills, list):
-            skills = {"technical": raw_skills, "soft": []}
+            skills = {"categories": [], "technical": raw_skills, "soft": []}
         elif isinstance(raw_skills, dict):
             skills = {
+                "categories": [],
                 "technical": raw_skills.get("technical", raw_skills.get("technical_skills", [])),
                 "soft": raw_skills.get("soft", raw_skills.get("soft_skills", [])),
             }
-            if not skills["technical"] and not skills["soft"]:
-                all_vals = []
-                for v in raw_skills.values():
-                    if isinstance(v, list):
-                        all_vals.extend(v)
-                    elif isinstance(v, str):
-                        all_vals.append(v)
-                skills = {"technical": all_vals, "soft": []}
         else:
-            skills = {"technical": [], "soft": []}
+            skills = {"categories": [], "technical": [], "soft": []}
 
     resume_data = {
         "contact": contact_info,
+        "role_titles": getattr(optimized_data, "role_titles", []),
         "summary": optimized_data.optimized_summary,
         "experience": [
             {
@@ -90,11 +92,11 @@ def generate_pdf(session_id: str) -> Response:
                 "description": proj.description if hasattr(proj, "description") else "",
                 "bullets": proj.bullets if hasattr(proj, "bullets") else [],
                 "technologies": proj.technologies,
-                "start_date": getattr(proj, "start_date", ""),
-                "end_date": getattr(proj, "end_date", ""),
-                "url": getattr(proj, "url", ""),
+                "start_date": structured.get("projects", [{}])[i].get("start_date", "") if i < len(structured.get("projects", [])) else "",
+                "end_date": structured.get("projects", [{}])[i].get("end_date", "") if i < len(structured.get("projects", [])) else "",
+                "url": structured.get("projects", [{}])[i].get("url", "") if i < len(structured.get("projects", [])) else "",
             }
-            for proj in optimized_data.optimized_projects
+            for i, proj in enumerate(optimized_data.optimized_projects)
         ],
         "skills": skills,
         "education": structured.get("education", []),
