@@ -15,47 +15,19 @@ router = APIRouter(tags=["pdf"])
     summary="Generate optimized ATS-friendly PDF resume",
     description="Loads optimized resume data from the existing session and compiles it into a downloadable PDF.",
     responses={
-        404: {
-            "description": "Session or linked data not found",
-            "content": {
-                "application/json": {
-                    "example": {"error": {"code": "NOT_FOUND", "message": "Session not found."}}
-                }
-            }
-        },
-        422: {
-            "description": "Missing or invalid optimized data",
-            "content": {
-                "application/json": {
-                    "example": {"error": {"code": "MISSING_OPTIMIZATION", "message": "Session does not contain optimized resume data. Please run optimization first."}}
-                }
-            }
-        },
-        502: {
-            "description": "PDF generation or compilation failures",
-            "content": {
-                "application/json": {
-                    "example": {"error": {"code": "PDF_GENERATION_FAILED", "message": "PDF engine not initialized. Please ensure WeasyPrint and GTK+ libraries are installed."}}
-                }
-            }
-        },
+        404: {"description": "Session or linked data not found"},
+        422: {"description": "Missing or invalid optimized data"},
+        502: {"description": "PDF generation or compilation failures"},
     }
 )
 def generate_pdf(session_id: str) -> Response:
-    # 1. Load the session bundle
     bundle = load_session_bundle(session_id)
 
-    # 2. Retrieve and validate optimized data
     optimized_data = getattr(bundle.session, "optimized_data", None)
     if not optimized_data:
         raise HTTPException(
             status_code=422,
-            detail={
-                "error": {
-                    "code": "MISSING_OPTIMIZATION",
-                    "message": "Session does not contain optimized resume data. Please run optimization first.",
-                }
-            },
+            detail={"error": {"code": "MISSING_OPTIMIZATION", "message": "Run optimization first."}},
         )
 
     try:
@@ -65,31 +37,20 @@ def generate_pdf(session_id: str) -> Response:
             else:
                 raise ValueError("Optimized data is not in the correct format.")
     except Exception as exc:
-        logger.error("Invalid optimized data format for session_id=%s: %s", session_id, exc)
         raise HTTPException(
             status_code=422,
-            detail={
-                "error": {
-                    "code": "INVALID_OPTIMIZED_DATA",
-                    "message": f"Optimized data is invalid: {str(exc)}",
-                }
-            },
+            detail={"error": {"code": "INVALID_OPTIMIZED_DATA", "message": str(exc)}},
         )
 
-    # 3. Combine original and optimized data
     resume = bundle.resume
     structured = resume.structured_content
     contact_info = structured.get("contact", {})
 
-    # --- Skills: prefer AI-optimized skills (JD-reordered), fallback to original ---
+    # Skills — prefer AI optimized, fallback to original
     ai_skills = getattr(optimized_data, "optimized_skills", None)
     if ai_skills and (ai_skills.technical or ai_skills.soft):
-        skills = {
-            "technical": ai_skills.technical,
-            "soft": ai_skills.soft,
-        }
+        skills = {"technical": ai_skills.technical, "soft": ai_skills.soft}
     else:
-        # Fallback: parse from original structured content
         raw_skills = structured.get("skills", {})
         if isinstance(raw_skills, list):
             skills = {"technical": raw_skills, "soft": []}
@@ -126,19 +87,22 @@ def generate_pdf(session_id: str) -> Response:
         "projects": [
             {
                 "name": proj.name,
-                "description": proj.description,
+                "description": proj.description if hasattr(proj, "description") else "",
+                "bullets": proj.bullets if hasattr(proj, "bullets") else [],
                 "technologies": proj.technologies,
+                "start_date": getattr(proj, "start_date", ""),
+                "end_date": getattr(proj, "end_date", ""),
+                "url": getattr(proj, "url", ""),
             }
             for proj in optimized_data.optimized_projects
         ],
         "skills": skills,
         "education": structured.get("education", []),
         "certifications": structured.get("certifications", []),
-        # achievements may be stored as a list of strings
         "achievements": structured.get("achievements", []),
     }
 
-    # 4. Determine downloadable filename
+    # Filename
     raw_name = contact_info.get("name", "").strip()
     filename = "Optimized_Resume.pdf"
     if raw_name:
@@ -153,28 +117,19 @@ def generate_pdf(session_id: str) -> Response:
             if name_cleaned:
                 filename = f"{name_cleaned}_Resume.pdf"
 
-    logger.info("Generating PDF for session_id=%s filename=%s", session_id, filename)
+    logger.info("Generating PDF session_id=%s filename=%s", session_id, filename)
 
-    # 5. Render HTML and compile to PDF
     try:
         html_content = pdf_service.render_resume_to_html(resume_data)
         pdf_bytes = pdf_service.generate_pdf_from_html(html_content)
     except PDFGenerationError as exc:
         raise HTTPException(
             status_code=502,
-            detail={
-                "error": {
-                    "code": "PDF_GENERATION_FAILED",
-                    "message": str(exc),
-                }
-            },
+            detail={"error": {"code": "PDF_GENERATION_FAILED", "message": str(exc)}},
         )
 
-    # 6. Return response
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}"
-        }
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
