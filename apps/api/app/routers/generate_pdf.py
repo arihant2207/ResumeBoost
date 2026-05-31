@@ -48,11 +48,12 @@ def generate_pdf(session_id: str) -> Response:
 
     # Skills — prefer AI optimized with categories
     ai_skills = getattr(optimized_data, "optimized_skills", None)
-    if ai_skills and (ai_skills.technical or ai_skills.soft or ai_skills.categories):
+    ai_categories = getattr(ai_skills, "categories", []) or []
+    if ai_skills and (ai_skills.technical or ai_skills.soft or ai_categories):
         skills = {
             "categories": [
                 {"label": cat.label, "skills": cat.skills}
-                for cat in (ai_skills.categories or [])
+                for cat in ai_categories
                 if cat.skills
             ],
             "technical": ai_skills.technical,
