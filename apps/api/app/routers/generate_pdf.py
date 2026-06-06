@@ -46,16 +46,49 @@ def generate_pdf(session_id: str) -> Response:
     structured = resume.structured_content
     contact_info = structured.get("contact", {})
 
-    # Skills — prefer AI optimized with categories
+    # Skill category mapping — auto-categorize from flat list
+    SKILL_CATEGORIES = {
+        "Languages": ["python", "javascript", "typescript", "java", "c++", "c#", "go", "rust", "swift", "kotlin", "j.s."],
+        "AI/ML": ["nlp", "machine learning", "machine learning basics", "tensorflow", "pytorch", "scikit-learn", "llms", "rag", "fine-tuning", "huggingface", "computer vision", "stable diffusion", "langchain", "langgraph", "faiss", "pinecone", "mlflow"],
+        "Frameworks": ["react.js", "react", "fastapi", "flask", "node.js", "express", "django", "rest apis", "rest api design", "fetch api", "langchain"],
+        "Frontend": ["html", "css", "tailwind css", "leaflet.js", "leaflet", "openstreetmap"],
+        "Cloud & DB": ["aws", "gcp", "google cloud", "oracle cloud", "azure", "postgresql", "mysql", "sqlite", "mongodb", "sql", "firebase"],
+        "Tools": ["git", "docker", "vs code", "jupyter", "ci/cd", "agile", "microservices", "system design"],
+    }
+
+    def _build_categories(technical_list: list) -> list:
+        """Auto-categorize skills from flat list."""
+        used = set()
+        result = []
+        for label, keywords in SKILL_CATEGORIES.items():
+            matched = []
+            for skill in technical_list:
+                if skill.lower() in keywords and skill not in used:
+                    matched.append(skill)
+                    used.add(skill)
+            if matched:
+                result.append({"label": label, "skills": matched})
+        # Remaining uncategorized skills
+        remaining = [s for s in technical_list if s not in used]
+        if remaining:
+            result.append({"label": "Other", "skills": remaining})
+        return result
+
+    # Skills — prefer AI optimized
     ai_skills = getattr(optimized_data, "optimized_skills", None)
     ai_categories = getattr(ai_skills, "categories", []) or []
     if ai_skills and (ai_skills.technical or ai_skills.soft or ai_categories):
-        skills = {
-            "categories": [
+        # If AI returned categories use them, else auto-generate
+        if ai_categories:
+            built_categories = [
                 {"label": cat.label, "skills": cat.skills}
                 for cat in ai_categories
                 if cat.skills
-            ],
+            ]
+        else:
+            built_categories = _build_categories(ai_skills.technical)
+        skills = {
+            "categories": built_categories,
             "technical": ai_skills.technical,
             "soft": ai_skills.soft,
         }
