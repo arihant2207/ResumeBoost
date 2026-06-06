@@ -28,7 +28,6 @@
       text-decoration: none;
     }
 
-    /* Header */
     .header {
       text-align: center;
       margin-bottom: 7px;
@@ -62,7 +61,6 @@
       color: #999;
     }
 
-    /* Section */
     .section {
       margin-top: 6px;
     }
@@ -77,14 +75,12 @@
       margin-bottom: 4px;
     }
 
-    /* Summary */
     .summary-text {
       font-size: 8.5pt;
       text-align: justify;
       margin: 0;
     }
 
-    /* Skills */
     .skills-row {
       font-size: 8.5pt;
       margin-bottom: 2px;
@@ -94,7 +90,6 @@
       font-weight: bold;
     }
 
-    /* Experience */
     .exp-item {
       margin-bottom: 5px;
       page-break-inside: avoid;
@@ -124,7 +119,6 @@
       margin-bottom: 2px;
     }
 
-    /* Bullets */
     .bullets {
       margin: 2px 0 0 0;
       padding-left: 13px;
@@ -137,7 +131,6 @@
       text-align: justify;
     }
 
-    /* Projects */
     .proj-item {
       margin-bottom: 5px;
       page-break-inside: avoid;
@@ -166,7 +159,6 @@
       margin-bottom: 2px;
     }
 
-    /* Education */
     .edu-item {
       margin-bottom: 4px;
       page-break-inside: avoid;
@@ -188,7 +180,6 @@
       color: #333;
     }
 
-    /* Lists */
     .simple-list {
       margin: 2px 0 0 0;
       padding-left: 13px;
@@ -200,9 +191,10 @@
       margin-bottom: 1px;
     }
 
-    .cert-item {
+    .cert-line {
       font-size: 8.5pt;
-      margin-bottom: 1px;
+      margin-bottom: 2px;
+      padding-left: 13px;
     }
   </style>
 </head>
@@ -212,7 +204,7 @@
   <!-- HEADER -->
   <div class="header">
     <div class="name">{{ contact.name }}</div>
-    {% if role_titles %}
+    {% if role_titles and role_titles | length > 0 %}
     <div class="role-titles">{{ role_titles | join(' • ') }}</div>
     {% endif %}
     <div class="contact-line">
@@ -222,7 +214,9 @@
       {% if contact.linkedin %}
       <span class="sep">|</span>
       {% set li_url = contact.linkedin if contact.linkedin.startswith('http') else 'https://' + contact.linkedin %}
-      <a href="{{ li_url }}">LinkedIn</a>
+      {% set li_display = contact.linkedin.replace('linkedin.com/in/', '').replace('https://', '').replace('http://',
+      '') %}
+      <a href="{{ li_url }}">{{ li_display }}</a>
       {% endif %}
       {% if contact.github %}
       <span class="sep">|</span>
@@ -240,30 +234,31 @@
   </div>
   {% endif %}
 
-  <!-- SKILLS — categorized if available, else flat -->
+  <!-- SKILLS -->
   {% if skills %}
   <div class="section">
     <div class="section-title">Technical Skills</div>
-    {% if skills.categories and skills.categories | length > 0 %}
-    {% for cat in skills.categories %}
-    {% if cat.skills %}
+    {% set cats = skills.categories if skills.categories else [] %}
+    {% if cats | length > 0 %}
+    {% for cat in cats %}
+    {% if cat.skills and cat.skills | length > 0 %}
     <div class="skills-row">
       <span class="skills-label">{{ cat.label }}:</span> {{ cat.skills | join(', ') }}
     </div>
     {% endif %}
     {% endfor %}
-    {% if skills.soft %}
+    {% if skills.soft and skills.soft | length > 0 %}
     <div class="skills-row">
       <span class="skills-label">Soft Skills:</span> {{ skills.soft | join(', ') }}
     </div>
     {% endif %}
     {% else %}
-    {% if skills.technical %}
+    {% if skills.technical and skills.technical | length > 0 %}
     <div class="skills-row">
       <span class="skills-label">Technical:</span> {{ skills.technical | join(' • ') }}
     </div>
     {% endif %}
-    {% if skills.soft %}
+    {% if skills.soft and skills.soft | length > 0 %}
     <div class="skills-row">
       <span class="skills-label">Soft Skills:</span> {{ skills.soft | join(' • ') }}
     </div>
@@ -290,7 +285,9 @@
       {% endif %}
       {% if exp.bullets %}
       <ul class="bullets">
-        {% for b in exp.bullets %}{% if b and b.strip() %}<li>{{ b }}</li>{% endif %}{% endfor %}
+        {% for b in exp.bullets %}
+        {% if b and b.strip() | length > 0 %}<li>{{ b.strip() }}</li>{% endif %}
+        {% endfor %}
       </ul>
       {% endif %}
     </div>
@@ -307,7 +304,7 @@
       <div class="row">
         <span>
           <span class="proj-name">{{ proj.name }}</span>
-          {% if proj.url %}
+          {% if proj.url and proj.url.strip() %}
           &nbsp;|&nbsp;<a class="proj-link"
             href="{{ proj.url if proj.url.startswith('http') else 'https://' + proj.url }}">GitHub</a>
           {% endif %}
@@ -317,18 +314,20 @@
           {% if proj.end_date %} – {{ proj.end_date }}{% endif %}
         </span>
       </div>
-      {% if proj.technologies %}
+      {% if proj.technologies and proj.technologies | length > 0 %}
       <div class="proj-tech">{{ proj.technologies | join(' • ') }}</div>
       {% endif %}
-      {% if proj.bullets %}
+      {% if proj.bullets and proj.bullets | length > 0 %}
       <ul class="bullets">
-        {% for b in proj.bullets %}{% if b and b.strip() %}<li>{{ b }}</li>{% endif %}{% endfor %}
+        {% for b in proj.bullets %}
+        {% if b and b.strip() | length > 0 %}<li>{{ b.strip() }}</li>{% endif %}
+        {% endfor %}
       </ul>
-      {% elif proj.description %}
+      {% elif proj.description and proj.description.strip() %}
       <ul class="bullets">
         {% for sentence in proj.description.split('. ') %}
         {% set s = sentence.strip().rstrip('.') %}
-        {% if s %}<li>{{ s }}.</li>{% endif %}
+        {% if s | length > 5 %}<li>{{ s }}.</li>{% endif %}
         {% endfor %}
       </ul>
       {% endif %}
@@ -359,26 +358,33 @@
   {% endif %}
 
   <!-- ACHIEVEMENTS -->
-  {% if achievements %}
+  {% if achievements and achievements | length > 0 %}
   <div class="section">
     <div class="section-title">Achievements</div>
     <ul class="simple-list">
-      {% for a in achievements %}{% if a and a.strip() %}<li>{{ a }}</li>{% endif %}{% endfor %}
+      {% for a in achievements %}
+      {% if a and a.strip() | length > 5 %}<li>{{ a.strip() }}</li>{% endif %}
+      {% endfor %}
     </ul>
   </div>
   {% endif %}
 
   <!-- CERTIFICATIONS -->
-  {% if certifications %}
+  {% if certifications and certifications | length > 0 %}
   <div class="section">
     <div class="section-title">Certifications</div>
     {% for cert in certifications %}
-    {% if cert and cert.strip() %}
-    <div class="cert-item">
-      {% if cert is mapping %}
-      {% if cert.url %}<a href="{{ cert.url }}">{{ cert.name }}</a>{% else %}{{ cert.name }}{% endif %}
-      {% else %}{{ cert }}{% endif %}
+    {% if cert is mapping %}
+    {% if cert.name and cert.name.strip() %}
+    <div class="cert-line">
+      {% if cert.url %}<a href="{{ cert.url }}">{{ cert.name.strip() }}</a>
+      {% else %}{{ cert.name.strip() }}{% endif %}
     </div>
+    {% endif %}
+    {% else %}
+    {% if cert and cert.strip() | length > 3 %}
+    <div class="cert-line">{{ cert.strip() }}</div>
+    {% endif %}
     {% endif %}
     {% endfor %}
   </div>

@@ -15,60 +15,72 @@ Rewrite the resume sections so that:
 
 ## MNC-Level Writing Standards
 - Start EVERY bullet with a strong past-tense action verb: Built, Developed, Designed, Implemented, Engineered, Optimized, Deployed, Integrated, Architected, Automated, Analyzed, Delivered
-- NEVER start with: "Responsible for", "Worked on", "Helped", "Assisted", "Participated in"
+- NEVER start with: "Responsible for", "Worked on", "Helped", "Assisted", "Participated in", "Explored", "Gained"
 - Bullet format: [Action Verb] + [What/How] + [Impact/Result/Scale]
-- Example WEAK: "Worked on sentiment analysis web app"
-- Example STRONG: "Built a full-stack sentiment analysis web application using Python and NLP, enabling data-driven insights from user-generated text across 3 business domains"
 - Keep each bullet to 1-2 lines max
-- EVERY project MUST have 2-4 bullets in the "bullets" array — NEVER leave bullets as empty array []
-- EVERY experience MUST have 2-3 bullets in the "bullets" array — NEVER leave bullets as empty array []
-- Integrate JD keywords naturally — do not keyword-stuff
+- EVERY project MUST have 2-4 bullets — NEVER leave bullets as empty array []
+- EVERY experience MUST have 2-3 bullets — NEVER leave bullets as empty array []
 
-## Skills Optimization
-- Reorder technical skills: JD-matching skills FIRST, then others
-- Do NOT add skills not in the original resume
-- Keep ALL original skills — just reorder them
-- "optimized_skills.technical" MUST NOT be empty — copy from original if unsure
-- "optimized_skills.soft" MUST NOT be empty — copy from original if unsure
+## Role Titles — REQUIRED
+- Generate exactly 2-3 short role titles based on candidate's actual skills and JD
+- Example: ["Python Developer", "AI/ML Engineer", "Full-Stack Developer"]
+- "role_titles" MUST be a non-empty array — never []
 
-## CRITICAL OUTPUT RULES
-- "bullets" array in EVERY project and experience MUST contain actual bullet point strings
-- "optimized_skills.technical" MUST be a non-empty array
-- "description" field in projects should be empty string ""
-- Double-check your JSON before returning — no empty arrays for bullets or skills
+## Skills — MUST BE CATEGORIZED
+You MUST organize skills into categories. This is MANDATORY — do not return a flat list.
+- Look at the candidate's skills and group them logically
+- Use ONLY these category labels (pick ones that apply):
+  - "Languages" — programming languages like Python, JavaScript, Java, C++
+  - "AI/ML" — NLP, Machine Learning, TensorFlow, PyTorch, LLMs, RAG
+  - "Frameworks" — React.js, FastAPI, Flask, Node.js, REST APIs
+  - "Cloud & DB" — AWS, GCP, Oracle Cloud, PostgreSQL, MySQL, SQLite
+  - "Tools" — Git, Docker, VS Code, Jupyter, CI/CD
+  - "Frontend" — HTML, CSS, Tailwind CSS, TypeScript, Leaflet.js
+- Each category MUST only contain skills actually present in the original resume
+- Reorder within each category: JD-matching skills FIRST
+- "technical" flat list: same skills as categories combined, JD-relevant first
+- "soft": copy exactly from original resume
+- "categories" MUST be a non-empty array — NEVER return empty categories []
 
-## Output Format
-Respond with ONLY valid JSON — no markdown fences, no preamble, no commentary after:
+## Summary — MNC Level
+- 2-3 sentences MAX
+- Mention specific projects built (from resume)
+- Include notable achievements if present
+- NO generic phrases: "highly motivated", "passionate", "eager to learn", "results-driven"
+- Start strong: who you are + what you built + value you bring
+
+## Output Format — FOLLOW EXACTLY
+Respond with ONLY valid JSON — no markdown, no commentary:
 {
-  "optimized_summary": "<2-3 sentence summary: Who you are + Key strengths matching JD + Value you bring>",
+  "role_titles": ["Python Developer", "AI Engineer", "Full-Stack Developer"],
+  "optimized_summary": "...",
   "optimized_projects": [
     {
-      "name": "<EXACT original project name — copy character by character>",
+      "name": "<EXACT original name>",
       "description": "",
-      "bullets": [
-        "<Action Verb> <what you built/did> <using what tech> <impact/result>",
-        "<Action Verb> <what you built/did> <using what tech> <impact/result>",
-        "<Action Verb> <what you built/did> <using what tech> <impact/result>"
-      ],
-      "technologies": ["<tech1>", "<tech2>", "<tech3>"]
+      "bullets": ["<verb> ...", "<verb> ...", "<verb> ..."],
+      "technologies": ["tech1", "tech2"]
     }
   ],
   "optimized_experience": [
     {
-      "company": "<EXACT original company name>",
-      "title": "<original title>",
-      "location": "<original location>",
-      "start_date": "<EXACT original start date>",
-      "end_date": "<EXACT original end date>",
-      "bullets": [
-        "<Action Verb> <what you did> <impact>",
-        "<Action Verb> <what you did> <impact>"
-      ]
+      "company": "<EXACT original>",
+      "title": "<original>",
+      "location": "<original>",
+      "start_date": "<EXACT original>",
+      "end_date": "<EXACT original>",
+      "bullets": ["<verb> ...", "<verb> ..."]
     }
   ],
   "optimized_skills": {
-    "technical": ["<skill1>", "<skill2>", "<skill3>"],
-    "soft": ["<soft1>", "<soft2>"]
+    "categories": [
+      {"label": "Languages", "skills": ["Python", "JavaScript"]},
+      {"label": "AI/ML", "skills": ["NLP", "Machine Learning"]},
+      {"label": "Frameworks", "skills": ["React.js", "REST APIs"]},
+      {"label": "Frontend", "skills": ["HTML", "CSS", "Tailwind CSS"]}
+    ],
+    "technical": ["Python", "NLP", "Machine Learning", "REST APIs", "React.js", "HTML", "CSS"],
+    "soft": ["Communication", "Teamwork"]
   }
 }
 
