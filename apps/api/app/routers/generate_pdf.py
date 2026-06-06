@@ -134,8 +134,8 @@ def generate_pdf(session_id: str) -> Response:
         ],
         "skills": skills,
         "education": structured.get("education", []),
-        "certifications": structured.get("certifications", []),
-        "achievements": structured.get("achievements", []),
+        "certifications": [c for c in structured.get("certifications", []) if c and str(c).strip()],
+        "achievements": [a for a in structured.get("achievements", []) if a and str(a).strip()],
     }
 
     # Filename
