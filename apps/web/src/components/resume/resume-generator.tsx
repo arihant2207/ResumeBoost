@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, Download, CheckCircle2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,19 +12,29 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { FileUpload } from "@/components/resume/file-upload";
 import { JobDescriptionForm } from "@/components/resume/job-description-form";
-import { AtsScoreCard } from "@/components/resume/ats-score-card";
-import { DownloadButton } from "@/components/resume/download-button";
-import { ParsedResultCard } from "@/components/resume/parsed-result-card";
-import { ApiError, processResumeAndJobDescription } from "@/lib/api-client";
-import { MIN_JD_LENGTH, PLACEHOLDER_ATS_SCORE } from "@/lib/constants";
+import {
+  ApiError,
+  processResumeAndJobDescription,
+  analyzeSession,
+  optimizeSession,
+  downloadPdf,
+  type AtsAnalysisResponse,
+} from "@/lib/api-client";
+import { MIN_JD_LENGTH } from "@/lib/constants";
 import type { SessionResponse } from "@/types/api";
-import type {
-  AtsScorePlaceholder,
-  GenerationStatus,
-  UploadedResume,
-} from "@/types";
+import type { GenerationStatus, UploadedResume } from "@/types";
+
+type Step = "idle" | "uploading" | "analyzing" | "optimizing" | "generating" | "complete";
+
+const STEPS: { key: Step; label: string }[] = [
+  { key: "uploading", label: "Uploading resume" },
+  { key: "analyzing", label: "Analyzing ATS score" },
+  { key: "optimizing", label: "Optimizing resume" },
+  { key: "generating", label: "Generating PDF" },
+];
 
 export function ResumeGenerator() {
   const [resume, setResume] = useState<UploadedResume | null>(null);
@@ -32,9 +42,10 @@ export function ResumeGenerator() {
   const [resumeError, setResumeError] = useState<string | null>(null);
   const [jdError, setJdError] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [status, setStatus] = useState<GenerationStatus>("idle");
+  const [step, setStep] = useState<Step>("idle");
   const [session, setSession] = useState<SessionResponse | null>(null);
-  const [atsScore, setAtsScore] = useState<AtsScorePlaceholder | null>(null);
+  const [atsScore, setAtsScore] = useState<AtsAnalysisResponse | null>(null);
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
 
   const validate = useCallback((): boolean => {
     let valid = true;
@@ -48,9 +59,7 @@ export function ResumeGenerator() {
       setJdError("Please paste the job description.");
       valid = false;
     } else if (jobDescription.trim().length < MIN_JD_LENGTH) {
-      setJdError(
-        `Job description must be at least ${MIN_JD_LENGTH} characters.`
-      );
+      setJdError(`Job description must be at least ${MIN_JD_LENGTH} characters.`);
       valid = false;
     } else {
       setJdError(null);
@@ -61,56 +70,73 @@ export function ResumeGenerator() {
   const handleGenerate = async () => {
     if (!validate() || !resume) return;
 
-    setStatus("generating");
     setApiError(null);
     setSession(null);
     setAtsScore(null);
+    setPdfBlob(null);
 
     try {
+      // Step 1: Upload + Create Session
+      setStep("uploading");
       const result = await processResumeAndJobDescription(
         resume.file,
         jobDescription.trim()
       );
       setSession(result);
 
-      // ATS score remains placeholder until Claude is added in a later phase
-      setAtsScore({
-        overall: PLACEHOLDER_ATS_SCORE.overall,
-        keywordMatch: PLACEHOLDER_ATS_SCORE.keywordMatch,
-        formatting: PLACEHOLDER_ATS_SCORE.formatting,
-        structure: PLACEHOLDER_ATS_SCORE.structure,
-        matchedKeywords: [...PLACEHOLDER_ATS_SCORE.matchedKeywords],
-        missingKeywords: [...PLACEHOLDER_ATS_SCORE.missingKeywords],
-      });
-      setStatus("complete");
+      // Step 2: Analyze ATS Score
+      setStep("analyzing");
+      const analysis = await analyzeSession(result.id);
+      setAtsScore(analysis);
+
+      // Step 3: Optimize Resume
+      setStep("optimizing");
+      await optimizeSession(result.id);
+
+      // Step 4: Generate PDF
+      setStep("generating");
+      const blob = await downloadPdf(result.id);
+      setPdfBlob(blob);
+
+      setStep("complete");
     } catch (err) {
-      setStatus("idle");
+      setStep("idle");
       if (err instanceof ApiError) {
         setApiError(err.message);
       } else {
-        setApiError("Something went wrong. Is the API running on port 8000?");
+        setApiError("Something went wrong. Please try again.");
       }
     }
   };
 
   const handleDownload = () => {
-    alert(
-      "PDF download will be available in a later phase. Your resume text has been parsed and stored in the session."
-    );
+    if (!pdfBlob || !session) return;
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Optimized_Resume.pdf";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
-  const isGenerating = status === "generating";
-  const isComplete = status === "complete";
+  const isProcessing = !["idle", "complete"].includes(step);
+  const isComplete = step === "complete";
+
+  const getStepIndex = (s: Step) => STEPS.findIndex((st) => st.key === s);
+  const currentStepIndex = getStepIndex(step);
 
   return (
     <div className="space-y-8">
       <div className="grid gap-8 lg:grid-cols-5">
+        {/* Left — Input Card */}
         <Card className="lg:col-span-3">
           <CardHeader>
-            <CardTitle>Resume optimizer</CardTitle>
+            <CardTitle>Resume Optimizer</CardTitle>
             <CardDescription>
-              Upload your resume and paste the job description. The backend
-              extracts text and returns structured JSON.
+              Upload your resume and paste the job description. AI will optimize
+              your resume and generate an ATS-friendly PDF.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -122,7 +148,8 @@ export function ResumeGenerator() {
                   setResume(f);
                   setResumeError(null);
                   setSession(null);
-                  setStatus("idle");
+                  setStep("idle");
+                  setPdfBlob(null);
                 }}
                 error={resumeError}
               />
@@ -139,6 +166,30 @@ export function ResumeGenerator() {
 
             <Separator />
 
+            {/* Progress Steps */}
+            {isProcessing && (
+              <div className="space-y-2">
+                {STEPS.map((s, i) => {
+                  const isDone = i < currentStepIndex;
+                  const isCurrent = i === currentStepIndex;
+                  return (
+                    <div key={s.key} className="flex items-center gap-3">
+                      {isDone ? (
+                        <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+                      ) : isCurrent ? (
+                        <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
+                      ) : (
+                        <div className="size-4 shrink-0 rounded-full border-2 border-muted" />
+                      )}
+                      <span className={`text-sm ${isCurrent ? "font-medium text-foreground" : isDone ? "text-muted-foreground line-through" : "text-muted-foreground"}`}>
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {apiError && (
               <p
                 className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
@@ -153,10 +204,10 @@ export function ResumeGenerator() {
                 type="button"
                 size="lg"
                 className="w-full gap-2 sm:w-auto"
-                disabled={isGenerating}
+                disabled={isProcessing}
                 onClick={handleGenerate}
               >
-                {isGenerating ? (
+                {isProcessing ? (
                   <>
                     <Loader2 className="size-4 animate-spin" aria-hidden />
                     Processing…
@@ -164,12 +215,22 @@ export function ResumeGenerator() {
                 ) : (
                   <>
                     <Sparkles className="size-4" aria-hidden />
-                    Generate resume
+                    {isComplete ? "Re-generate" : "Generate resume"}
                   </>
                 )}
               </Button>
 
-              <DownloadButton disabled={!isComplete} onClick={handleDownload} />
+              <Button
+                type="button"
+                size="lg"
+                variant="outline"
+                className="w-full gap-2 sm:w-auto"
+                disabled={!isComplete || !pdfBlob}
+                onClick={handleDownload}
+              >
+                <Download className="size-4" aria-hidden />
+                Download PDF
+              </Button>
             </div>
 
             {isComplete && session && (
@@ -177,23 +238,131 @@ export function ResumeGenerator() {
                 className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300"
                 role="status"
               >
-                Resume parsed successfully. Session ID:{" "}
-                <code className="text-xs">{session.id.slice(0, 8)}…</code>
+                ✅ Resume optimized successfully! Click Download PDF to save.
               </p>
             )}
           </CardContent>
         </Card>
 
+        {/* Right — ATS Score Card */}
         <div className="lg:col-span-2">
-          <AtsScoreCard
-            score={atsScore}
-            isPlaceholder={isComplete}
-            className="h-full"
-          />
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                ATS Score
+                {atsScore && (
+                  <Badge
+                    variant={
+                      atsScore.match_percentage >= 70
+                        ? "default"
+                        : atsScore.match_percentage >= 50
+                          ? "secondary"
+                          : "destructive"
+                    }
+                    className="text-lg px-3 py-1"
+                  >
+                    {atsScore.match_percentage}%
+                  </Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                {atsScore
+                  ? "Real-time ATS analysis results"
+                  : "Upload your resume to see your ATS score"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!atsScore && !isProcessing && (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="size-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                    <Sparkles className="size-8 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Your ATS score will appear here after analysis
+                  </p>
+                </div>
+              )}
+
+              {isProcessing && step === "analyzing" && (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="size-8 animate-spin text-primary mb-4" />
+                  <p className="text-sm text-muted-foreground">Analyzing your resume...</p>
+                </div>
+              )}
+
+              {atsScore && (
+                <div className="space-y-4">
+                  {/* Score Bar */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Match score</span>
+                      <span className="font-medium">{atsScore.match_percentage}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${atsScore.match_percentage >= 70
+                          ? "bg-emerald-500"
+                          : atsScore.match_percentage >= 50
+                            ? "bg-yellow-500"
+                            : "bg-red-500"
+                          }`}
+                        style={{ width: `${atsScore.match_percentage}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Matched Skills */}
+                  {atsScore.matched_skills.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                        ✅ Matched Skills
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {atsScore.matched_skills.map((skill) => (
+                          <Badge key={skill} variant="secondary" className="text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                            {skill}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Missing Skills */}
+                  {atsScore.missing_skills.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-red-600 dark:text-red-400">
+                        ❌ Missing Skills
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {atsScore.missing_skills.map((skill) => (
+                          <Badge key={skill} variant="secondary" className="text-xs bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300">
+                            {skill}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Suggestions */}
+                  {atsScore.improvement_suggestions.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">💡 Suggestions</p>
+                      <ul className="space-y-1">
+                        {atsScore.improvement_suggestions.slice(0, 3).map((s, i) => (
+                          <li key={i} className="text-xs text-muted-foreground flex gap-2">
+                            <span className="shrink-0">•</span>
+                            <span>{s}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
-
-      {session && <ParsedResultCard session={session} />}
     </div>
   );
 }

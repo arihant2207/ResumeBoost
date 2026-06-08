@@ -88,6 +88,33 @@ export async function createSession(
   });
 }
 
+export async function analyzeSession(sessionId: string): Promise<AtsAnalysisResponse> {
+  return apiFetch<AtsAnalysisResponse>(`/analyze-session/${sessionId}`, {
+    method: "POST",
+  });
+}
+
+export async function optimizeSession(sessionId: string): Promise<OptimizeResponse> {
+  return apiFetch<OptimizeResponse>(`/optimize-session/${sessionId}`, {
+    method: "POST",
+  });
+}
+
+export async function downloadPdf(sessionId: string): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/v1/generate-pdf/${sessionId}`, {
+    method: "POST",
+  });
+
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as ApiErrorBody;
+    const err = parseErrorBody(body, res.statusText);
+    err.status = res.status;
+    throw err;
+  }
+
+  return res.blob();
+}
+
 export async function processResumeAndJobDescription(
   file: File,
   jobDescription: string
@@ -101,4 +128,26 @@ export async function processResumeAndJobDescription(
     resume_id: resume.id,
     job_description_id: jd.id,
   });
+}
+
+// Types for analyze and optimize responses
+export interface AtsAnalysisResponse {
+  match_percentage: number;
+  matched_skills: string[];
+  missing_skills: string[];
+  ats_keywords: string[];
+  strengths: string[];
+  improvement_suggestions: string[];
+}
+
+export interface OptimizeResponse {
+  optimized_summary: string;
+  optimized_projects: object[];
+  optimized_experience: object[];
+  optimized_skills: {
+    technical: string[];
+    soft: string[];
+    categories: { label: string; skills: string[] }[];
+  };
+  role_titles: string[];
 }
