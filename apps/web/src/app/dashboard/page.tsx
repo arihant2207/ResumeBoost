@@ -189,7 +189,7 @@ export default function DashboardPage() {
                                 </p>
                             </div>
                             <Button asChild className="gap-2 shrink-0">
-                                <Link href="/#generator">
+                                <Link href="/optimize">
                                     <Sparkles className="size-4" />
                                     Optimize resume
                                     <ChevronRight className="size-4" />
@@ -214,7 +214,7 @@ export default function DashboardPage() {
                                     Optimize your first resume and it will appear here with your ATS score and download link.
                                 </p>
                                 <Button asChild className="gap-2">
-                                    <Link href="/#generator">
+                                    <Link href="/optimize">
                                         <Sparkles className="size-4" />
                                         Optimize my resume
                                     </Link>
