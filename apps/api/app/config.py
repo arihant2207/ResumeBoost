@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
 
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+
     @field_validator("gemini_api_key", mode="before")
     @classmethod
     def strip_api_key(cls, value: object) -> str:
