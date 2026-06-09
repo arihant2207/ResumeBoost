@@ -1,9 +1,10 @@
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from app.models.domain import SessionRecord
 from app.schemas.session import SessionCreate, SessionResponse
+from app.services.db_service import save_session
 from app.services.mappers import session_to_response
 from app.services.storage import store
 
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.post("", response_model=SessionResponse, status_code=201)
-def create_session(body: SessionCreate) -> SessionResponse:
+def create_session(body: SessionCreate, background_tasks: BackgroundTasks) -> SessionResponse:
     resume = store.resumes.get(body.resume_id)
     if not resume:
         raise HTTPException(
@@ -32,6 +33,10 @@ def create_session(body: SessionCreate) -> SessionResponse:
         job_description_id=body.job_description_id,
     )
     store.sessions[session.id] = session
+
+    # Persist to Supabase in background — does not block the response
+    background_tasks.add_task(save_session, session)
+
     return session_to_response(session, resume, job_description)
 
 
