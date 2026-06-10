@@ -1,48 +1,29 @@
-import logging
-
-from fastapi import APIRouter, BackgroundTasks
-
-from app.schemas.optimization import OptimizeSessionResponse
-from app.services.ai_service import optimize_resume_for_job
-from app.services.db_service import save_optimization_result
-from app.services.session_loader import load_session_bundle
-
-logger = logging.getLogger(__name__)
-
-router = APIRouter(tags=["optimization"])
+from pydantic import BaseModel, Field
 
 
-@router.post(
-    "/optimize-session/{session_id}",
-    response_model=OptimizeSessionResponse,
-    summary="Optimize resume summary, experience, and projects tailored to a job description (Gemini)",
-    description=(
-        "Loads the resume and job description linked to an existing session, "
-        "runs Google Gemini to rewrite the professional summary, projects, and work experience "
-        "sections tailored to the job description, and returns the optimized sections."
-    ),
-    responses={
-        404: {"description": "Session or linked data not found"},
-        422: {"description": "Resume or job description has no analyzable text"},
-        429: {"description": "Gemini rate limit"},
-        502: {"description": "Gemini API or response parsing error"},
-        503: {"description": "AI not configured, overloaded, or unavailable"},
-    },
-)
-def optimize_session(
-    session_id: str,
-    background_tasks: BackgroundTasks,
-) -> OptimizeSessionResponse:
-    bundle = load_session_bundle(session_id)
-    logger.info("Optimize session requested session_id=%s", session_id)
+class OptimizedProject(BaseModel):
+    name: str = Field(..., description="Project name (MUST match original exactly)")
+    description: str = Field(default="", description="Optional paragraph description")
+    bullets: list[str] = Field(default_factory=list, description="MNC-style bullet points for the project")
+    technologies: list[str] = Field(default_factory=list, description="Technologies used")
 
-    result = optimize_resume_for_job(
-        bundle.resume,
-        bundle.job_description.raw_text,
-        session_id=session_id,
-    )
 
-    # Persist optimization result to Supabase in background — does not block the response
-    background_tasks.add_task(save_optimization_result, session_id, result)
+class OptimizedExperience(BaseModel):
+    company: str = Field(..., description="Company name (MUST match original exactly)")
+    title: str = Field(..., description="Job title")
+    location: str = Field(default="", description="Location")
+    start_date: str = Field(..., description="Start date (MUST match original exactly)")
+    end_date: str = Field(..., description="End date (MUST match original exactly)")
+    bullets: list[str] = Field(default_factory=list, description="MNC-style bullet points")
 
-    return result
+
+class OptimizedSkills(BaseModel):
+    technical: list[str] = Field(default_factory=list)
+    soft: list[str] = Field(default_factory=list)
+
+
+class OptimizeSessionResponse(BaseModel):
+    optimized_summary: str = Field(..., description="Optimized professional summary.")
+    optimized_projects: list[OptimizedProject] = Field(default_factory=list)
+    optimized_experience: list[OptimizedExperience] = Field(default_factory=list)
+    optimized_skills: OptimizedSkills = Field(default_factory=OptimizedSkills)
