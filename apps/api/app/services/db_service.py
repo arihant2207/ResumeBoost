@@ -10,6 +10,7 @@ Design principles:
 """
 
 import logging
+import uuid
 from datetime import datetime, timezone
 
 from app.models.domain import JobDescriptionRecord, ResumeRecord, SessionRecord
@@ -26,11 +27,9 @@ def _now_iso() -> str:
 # ── Resumes ───────────────────────────────────────────────────────────────────
 
 def save_resume(resume: ResumeRecord) -> None:
-    """Upsert a parsed resume record into the `resumes` table."""
     client = get_supabase_client()
     if client is None:
         return
-
     try:
         client.table("resumes").upsert({
             "id": resume.id,
@@ -50,11 +49,9 @@ def save_resume(resume: ResumeRecord) -> None:
 # ── Job Descriptions ──────────────────────────────────────────────────────────
 
 def save_job_description(jd: JobDescriptionRecord) -> None:
-    """Upsert a job description record into the `job_descriptions` table."""
     client = get_supabase_client()
     if client is None:
         return
-
     try:
         client.table("job_descriptions").upsert({
             "id": jd.id,
@@ -70,11 +67,9 @@ def save_job_description(jd: JobDescriptionRecord) -> None:
 # ── Sessions ──────────────────────────────────────────────────────────────────
 
 def save_session(session: SessionRecord) -> None:
-    """Upsert a session record into the `sessions` table."""
     client = get_supabase_client()
     if client is None:
         return
-
     try:
         client.table("sessions").upsert({
             "id": session.id,
@@ -93,19 +88,17 @@ def save_optimization_result(
     session_id: str,
     result: OptimizeSessionResponse,
 ) -> None:
-    """
-    Upsert the AI optimization result into the `optimization_jobs` table.
-    Serialises the full Pydantic model as JSON.
-    """
     client = get_supabase_client()
     if client is None:
         return
-
     try:
         client.table("optimization_jobs").upsert({
+            "id": str(uuid.uuid4()),
             "session_id": session_id,
+            "status": "completed",
             "result": result.model_dump(),
             "completed_at": _now_iso(),
+            "created_at": _now_iso(),
         }).execute()
         logger.info("Saved optimization result session_id=%s to Supabase", session_id)
     except Exception:
