@@ -1,12 +1,16 @@
 import logging
-from fastapi import APIRouter
+
+from fastapi import APIRouter, BackgroundTasks
+
 from app.schemas.optimization import OptimizeSessionResponse
 from app.services.ai_service import optimize_resume_for_job
+from app.services.db_service import save_optimization_result
 from app.services.session_loader import load_session_bundle
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["optimization"])
+
 
 @router.post(
     "/optimize-session/{session_id}",
@@ -22,14 +26,22 @@ router = APIRouter(tags=["optimization"])
         422: {"description": "Resume or job description has no analyzable text"},
         429: {"description": "Gemini rate limit"},
         502: {"description": "Gemini API or response parsing error"},
-        503: {"description": "AI not configured or unavailable"},
+        503: {"description": "AI not configured, overloaded, or unavailable"},
     },
 )
-def optimize_session(session_id: str) -> OptimizeSessionResponse:
+def optimize_session(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+) -> OptimizeSessionResponse:
     bundle = load_session_bundle(session_id)
     logger.info("Optimize session requested session_id=%s", session_id)
-    return optimize_resume_for_job(
+
+    result = optimize_resume_for_job(
         bundle.resume,
         bundle.job_description.raw_text,
         session_id=session_id,
     )
+
+    background_tasks.add_task(save_optimization_result, session_id, result)
+
+    return result
