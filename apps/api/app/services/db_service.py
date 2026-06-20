@@ -14,6 +14,7 @@ import uuid
 from datetime import datetime, timezone
 
 from app.models.domain import JobDescriptionRecord, ResumeRecord, SessionRecord
+from app.schemas.analysis import ResumeAnalysisResponse
 from app.schemas.optimization import OptimizeSessionResponse
 from app.services.supabase_client import get_supabase_client
 
@@ -87,21 +88,62 @@ def save_session(session: SessionRecord) -> None:
 def save_optimization_result(
     session_id: str,
     result: OptimizeSessionResponse,
-) -> None:
+) -> str | None:
+    """
+    Upsert the AI optimization result into the `optimization_jobs` table.
+    Returns the generated optimization_job id on success, None on failure.
+    """
     client = get_supabase_client()
     if client is None:
-        return
+        return None
+
+    job_id = str(uuid.uuid4())
     try:
         client.table("optimization_jobs").upsert({
-            "id": str(uuid.uuid4()),
+            "id": job_id,
             "session_id": session_id,
             "status": "completed",
             "result": result.model_dump(),
             "completed_at": _now_iso(),
             "created_at": _now_iso(),
         }).execute()
-        logger.info("Saved optimization result session_id=%s to Supabase", session_id)
+        logger.info("Saved optimization result session_id=%s job_id=%s to Supabase", session_id, job_id)
+        return job_id
     except Exception:
         logger.exception(
             "Failed to save optimization result session_id=%s to Supabase", session_id
         )
+        return None
+
+
+# ── ATS scores ─────────────────────────────────────────────────────────────────
+
+def save_ats_score(
+    session_id: str,
+    analysis: ResumeAnalysisResponse,
+) -> None:
+    """
+    Upsert the ATS analysis result into the `ats_scores` table.
+    Linked via session_id so the dashboard can join sessions -> ats_scores.
+    """
+    client = get_supabase_client()
+    if client is None:
+        return
+
+    try:
+        client.table("ats_scores").upsert({
+            "id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "overall_score": analysis.match_percentage,
+            "keyword_score": analysis.match_percentage,
+            "formatting_score": None,
+            "structure_score": None,
+            "breakdown": None,
+            "matched_keywords": analysis.matched_skills,
+            "missing_keywords": analysis.missing_skills,
+            "suggestions": analysis.improvement_suggestions,
+            "created_at": _now_iso(),
+        }).execute()
+        logger.info("Saved ats_score session_id=%s to Supabase", session_id)
+    except Exception:
+        logger.exception("Failed to save ats_score session_id=%s to Supabase", session_id)

@@ -1,9 +1,10 @@
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 
 from app.schemas.analysis import ResumeAnalysisResponse
 from app.services.ai_service import analyze_resume_for_job
+from app.services.db_service import save_ats_score
 from app.services.session_loader import load_session_bundle
 
 logger = logging.getLogger(__name__)
@@ -28,11 +29,19 @@ router = APIRouter(tags=["analysis"])
         503: {"description": "AI not configured or unavailable"},
     },
 )
-def analyze_session(session_id: str) -> ResumeAnalysisResponse:
+def analyze_session(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+) -> ResumeAnalysisResponse:
     bundle = load_session_bundle(session_id)
     logger.info("Analyze session requested session_id=%s", session_id)
-    return analyze_resume_for_job(
+
+    result = analyze_resume_for_job(
         bundle.resume.raw_text,
         bundle.job_description.raw_text,
         session_id=session_id,
     )
+
+    background_tasks.add_task(save_ats_score, session_id, result)
+
+    return result
