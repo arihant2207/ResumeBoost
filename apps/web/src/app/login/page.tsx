@@ -3,154 +3,216 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, FileText } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Logo } from "@/components/logo";
 
 export default function LoginPage() {
-    const router = useRouter();
-    const supabase = createClient();
+  const router = useRouter();
+  const supabase = createClient();
 
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [googleLoading, setGoogleLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    const handleEmailLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setError(null);
+  // Hover states for button glows
+  const [isSubmitHovered, setIsSubmitHovered] = useState(false);
+  const [isGoogleHovered, setIsGoogleHovered] = useState(false);
 
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
-        if (error) {
-            setError(error.message);
-            setLoading(false);
-        } else {
-            router.push("/dashboard");
-            router.refresh();
-        }
-    };
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    const handleGoogleLogin = async () => {
-        setGoogleLoading(true);
-        setError(null);
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+    } else {
+      router.push("/dashboard");
+      router.refresh();
+    }
+  };
 
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: "google",
-            options: {
-                redirectTo: `${window.location.origin}/auth/callback`,
-            },
-        });
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError(null);
 
-        if (error) {
-            setError(error.message);
-            setGoogleLoading(false);
-        }
-    };
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
 
-    return (
-        <div className="flex min-h-screen items-center justify-center bg-muted/10 px-4">
-            <div className="w-full max-w-md space-y-6">
-                {/* Logo */}
-                <div className="flex items-center justify-center gap-2">
-                    <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                        <FileText className="size-5" />
-                    </span>
-                    <span className="text-2xl font-bold tracking-tight">
-                        Resume<span className="text-primary">Boost</span>
-                    </span>
-                </div>
+    if (error) {
+      setError(error.message);
+      setGoogleLoading(false);
+    }
+  };
 
-                <Card>
-                    <CardHeader className="text-center">
-                        <CardTitle>Welcome back</CardTitle>
-                        <CardDescription>Sign in to your account to continue</CardDescription>
-                    </CardHeader>
+  return (
+    <div className="relative flex min-h-screen items-center justify-center bg-[#050505] px-4 overflow-hidden">
+      {/* Extremely subtle blue ambient fog near bottom corners */}
+      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full bg-blue-500/[0.015] blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-blue-500/[0.015] blur-[150px] pointer-events-none" />
 
-                    <CardContent className="space-y-4">
-                        {/* Google Login */}
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="w-full gap-2"
-                            onClick={handleGoogleLogin}
-                            disabled={googleLoading || loading}
-                        >
-                            {googleLoading ? (
-                                <Loader2 className="size-4 animate-spin" />
-                            ) : (
-                                <svg className="size-4" viewBox="0 0 24 24">
-                                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                                </svg>
-                            )}
-                            Continue with Google
-                        </Button>
-
-                        <div className="flex items-center gap-2">
-                            <Separator className="flex-1" />
-                            <span className="text-xs text-muted-foreground">or</span>
-                            <Separator className="flex-1" />
-                        </div>
-
-                        {/* Email Login */}
-                        <form onSubmit={handleEmailLogin} className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="email">Email</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    placeholder="you@example.com"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    required
-                                    disabled={loading}
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="password">Password</Label>
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    placeholder="••••••••"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                    disabled={loading}
-                                />
-                            </div>
-
-                            {error && (
-                                <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                                    {error}
-                                </p>
-                            )}
-
-                            <Button type="submit" className="w-full" disabled={loading || googleLoading}>
-                                {loading ? <Loader2 className="size-4 animate-spin" /> : "Sign in"}
-                            </Button>
-                        </form>
-                    </CardContent>
-
-                    <CardFooter className="justify-center">
-                        <p className="text-sm text-muted-foreground">
-                            Don&apos;t have an account?{" "}
-                            <Link href="/signup" className="text-primary hover:underline font-medium">
-                                Sign up free
-                            </Link>
-                        </p>
-                    </CardFooter>
-                </Card>
-            </div>
+      {/* Page entrance animation */}
+      <motion.div
+        initial={{ opacity: 0, y: 24, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+        className="w-full max-w-md space-y-6 relative z-10"
+      >
+        {/* Wordmark logo */}
+        <div className="flex justify-center">
+          <Logo size="md" />
         </div>
-    );
+
+        {/* Auth Glass Card */}
+        <Card className="rounded-[24px] border-white/[0.10] bg-white/[0.02] backdrop-blur-md shadow-2xl relative overflow-hidden text-left">
+          {/* Subtle blue reflection */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-transparent to-blue-500/[0.012] pointer-events-none" />
+
+          <CardHeader className="text-center relative z-10 pb-4">
+            <CardTitle className="text-2xl font-semibold text-white tracking-tight">Welcome back</CardTitle>
+            <CardDescription className="text-sm text-white/50">Sign in to your account to continue</CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-5 relative z-10">
+            {/* Google Authentication */}
+            <div className="relative">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2 rounded-full border border-white/10 bg-white/[0.02] text-white hover:bg-white/[0.05] hover:border-white/20 transition-all duration-300 font-medium py-2.5"
+                onClick={handleGoogleLogin}
+                onMouseEnter={() => setIsGoogleHovered(true)}
+                onMouseLeave={() => setIsGoogleHovered(false)}
+                style={{
+                  boxShadow: isGoogleHovered && !(googleLoading || loading)
+                    ? "0 0 20px rgba(59,130,246,0.05)"
+                    : "none",
+                }}
+                disabled={googleLoading || loading}
+              >
+                {googleLoading ? (
+                  <Loader2 className="size-4 animate-spin text-white" />
+                ) : (
+                  <svg className="size-4" viewBox="0 0 24 24">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                  </svg>
+                )}
+                Continue with Google
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Separator className="flex-1 bg-white/[0.10]" />
+              <span className="text-xs text-white/30 font-medium uppercase tracking-wider">or</span>
+              <Separator className="flex-1 bg-white/[0.10]" />
+            </div>
+
+            {/* Email Login Form */}
+            <form onSubmit={handleEmailLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-medium text-white/80">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="rounded-xl border border-white/[0.10] bg-white/[0.03] text-white placeholder-white/40 focus:border-white/20 focus:bg-white/[0.05] focus:ring-1 focus:ring-blue-500/20 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none transition-all duration-300"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium text-white/80">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="rounded-xl border border-white/[0.10] bg-white/[0.03] text-white placeholder-white/40 focus:border-white/20 focus:bg-white/[0.05] focus:ring-1 focus:ring-blue-500/20 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none transition-all duration-300"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              {error && (
+                <p className="rounded-xl border border-red-500/20 bg-red-500/[0.04] px-4 py-3 text-sm text-red-400">
+                  {error}
+                </p>
+              )}
+
+              {/* Primary submit button with CTA white glow hover system */}
+              <div className="relative pt-2">
+                <div 
+                  className="absolute inset-0 rounded-full bg-white/20 blur-[24px] opacity-0 transition-opacity duration-500 pointer-events-none"
+                  style={{ opacity: isSubmitHovered && !loading ? 1 : 0 }}
+                />
+                
+                <Button
+                  type="submit"
+                  disabled={loading || googleLoading}
+                  onMouseEnter={() => setIsSubmitHovered(true)}
+                  onMouseLeave={() => setIsSubmitHovered(false)}
+                  className="relative w-full rounded-full border border-white bg-black hover:bg-black text-white font-medium transition-all duration-300"
+                  style={{
+                    transform: isSubmitHovered && !loading ? "scale(1.03)" : "scale(1)",
+                    boxShadow: isSubmitHovered && !loading 
+                      ? "0 0 24px rgba(255,255,255,0.2), 0 0 48px rgba(255,255,255,0.08)"
+                      : "none",
+                    transition: "all 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
+                  }}
+                >
+                  {loading ? (
+                    <Loader2 className="size-4 animate-spin text-white" />
+                  ) : (
+                    "Sign in"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+
+          <CardFooter className="justify-center border-t border-white/[0.05] py-4">
+            <p className="text-sm text-white/50">
+              Don&apos;t have an account?{" "}
+              <Link
+                href="/signup"
+                className="relative font-semibold text-blue-400 hover:text-blue-300 transition-colors duration-300 group py-0.5 inline-block"
+              >
+                Sign up free
+                <span className="absolute left-0 bottom-0 w-full h-[1px] bg-blue-400 scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]" />
+              </Link>
+            </p>
+          </CardFooter>
+        </Card>
+      </motion.div>
+    </div>
+  );
 }

@@ -2,6 +2,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/**
+ * @theme inline — maps CSS custom properties to Tailwind utility classes.
+ * Tailwind v4 reads these at build time to generate utilities.
+ *
+ * Font mappings: Next.js injects --font-inter / --font-fraunces /
+ * --font-jetbrains-mono via next/font/google at runtime. These @theme
+ * entries tell Tailwind what `font-sans`, `font-serif`, `font-mono` mean.
+ */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -25,51 +33,82 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Typography — serif + mono join the existing sans utility */
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-cormorant);
+  --font-mono: var(--font-jetbrains-mono);
 }
 
+/* ---------------------------------------------------------------------------
+   Light mode — editorial paper-and-ink palette
+   ---------------------------------------------------------------------------
+   Raw brand tokens (also available as CSS vars for inline use):
+     --ink              #1B1F23   primary text, headlines
+     --paper            #FAFAF7   main background — warm off-white
+     --editorial-green  #2D5F4F   primary accent — buttons, links
+     --editorial-green-light #E8F0EC  badge/hover tint
+     --seal-gold        #C9A961   sparse accents — score badges
+     --warm-grey        #E8E6DF   borders, dividers
+     --warm-grey-dark   #8C8A80   secondary/muted text
+   --------------------------------------------------------------------------- */
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.99 0.002 260);
-  --foreground: oklch(0.18 0.02 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 260);
-  --primary: oklch(0.45 0.2 265);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.01 260);
-  --secondary-foreground: oklch(0.25 0.02 260);
-  --muted: oklch(0.96 0.008 260);
-  --muted-foreground: oklch(0.5 0.02 260);
-  --accent: oklch(0.94 0.03 265);
-  --accent-foreground: oklch(0.3 0.08 265);
-  --destructive: oklch(0.55 0.22 25);
-  --border: oklch(0.91 0.01 260);
-  --input: oklch(0.91 0.01 260);
-  --ring: oklch(0.55 0.18 265);
+
+  /* Raw brand tokens — available for inline use via var() */
+  --ink: #1B1F23;
+  --paper: #FAFAF7;
+  --editorial-green: #2D5F4F;
+  --editorial-green-light: #E8F0EC;
+  --seal-gold: #C9A961;
+  --warm-grey: #E8E6DF;
+  --warm-grey-dark: #8C8A80;
+
+  /* shadcn semantic token mapping
+     All shadcn components (Button, Card, Badge, etc.) read these vars.
+     Remapping here means no individual component JSX needs touching. */
+  --background: #FAFAF7;
+  --foreground: #1B1F23;
+  --card: #FFFFFF;
+  --card-foreground: #1B1F23;
+  --popover: #FFFFFF;
+  --popover-foreground: #1B1F23;
+  --primary: #2D5F4F;
+  --primary-foreground: #FAFAF7;
+  --secondary: #F0EEE8;
+  --secondary-foreground: #1B1F23;
+  --muted: #E8E6DF;
+  --muted-foreground: #8C8A80;
+  --accent: #E8F0EC;
+  --accent-foreground: #2D5F4F;
+  --destructive: #C0392B;
+  --border: #E8E6DF;
+  --input: #E8E6DF;
+  --ring: #2D5F4F;
 }
 
+/* ---------------------------------------------------------------------------
+   Dark mode — warm dark charcoal, not cool blue-black.
+   Derived from the same ink/paper/editorial-green family.
+   --------------------------------------------------------------------------- */
 .dark {
-  --background: oklch(0.14 0.02 260);
-  --foreground: oklch(0.97 0.005 260);
-  --card: oklch(0.18 0.02 260);
-  --card-foreground: oklch(0.97 0.005 260);
-  --popover: oklch(0.18 0.02 260);
-  --popover-foreground: oklch(0.97 0.005 260);
-  --primary: oklch(0.65 0.18 265);
-  --primary-foreground: oklch(0.14 0.02 260);
-  --secondary: oklch(0.22 0.02 260);
-  --secondary-foreground: oklch(0.97 0.005 260);
-  --muted: oklch(0.22 0.02 260);
-  --muted-foreground: oklch(0.65 0.02 260);
-  --accent: oklch(0.25 0.05 265);
-  --accent-foreground: oklch(0.97 0.005 260);
-  --destructive: oklch(0.6 0.2 25);
-  --border: oklch(0.28 0.02 260);
-  --input: oklch(0.28 0.02 260);
-  --ring: oklch(0.55 0.18 265);
+  --background: #1C1B18;
+  --foreground: #F2F0EB;
+  --card: #26251F;
+  --card-foreground: #F2F0EB;
+  --popover: #26251F;
+  --popover-foreground: #F2F0EB;
+  --primary: #4A8F75;
+  --primary-foreground: #1C1B18;
+  --secondary: #2E2D29;
+  --secondary-foreground: #F2F0EB;
+  --muted: #2E2D29;
+  --muted-foreground: #A8A69E;
+  --accent: #2A3D36;
+  --accent-foreground: #7DBF9E;
+  --destructive: #E55447;
+  --border: #3A3830;
+  --input: #3A3830;
+  --ring: #4A8F75;
 }
 
 @layer base {
@@ -82,10 +121,11 @@
 }
 
 @layer utilities {
-  .gradient-mesh {
-    background-image:
-      radial-gradient(at 0% 0%, oklch(0.92 0.06 265 / 0.5) 0px, transparent 50%),
-      radial-gradient(at 100% 0%, oklch(0.9 0.08 200 / 0.4) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, oklch(0.93 0.05 300 / 0.35) 0px, transparent 50%);
+  /* Warm shadow — used on cards to avoid the default cool-grey shadow tint */
+  .shadow-warm {
+    box-shadow: 0 4px 16px rgba(27, 31, 35, 0.08), 0 1px 4px rgba(27, 31, 35, 0.04);
+  }
+  .shadow-warm-lg {
+    box-shadow: 0 8px 30px rgba(45, 95, 79, 0.10), 0 2px 8px rgba(27, 31, 35, 0.06);
   }
 }

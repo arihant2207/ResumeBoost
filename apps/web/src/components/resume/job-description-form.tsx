@@ -21,14 +21,16 @@ export function JobDescriptionForm({
   const isTooShort = value.length > 0 && value.length < MIN_JD_LENGTH;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 text-left">
       <div className="flex items-center justify-between">
-        <Label htmlFor="job-description">Job description</Label>
+        <Label htmlFor="job-description" className="text-sm font-medium text-white/80">
+          Job description
+        </Label>
         <span
           className={cn(
-            "text-xs text-muted-foreground",
-            isNearLimit && "text-amber-600 dark:text-amber-400",
-            charCount > MAX_JD_LENGTH && "text-destructive"
+            "text-xs text-white/40",
+            isNearLimit && "text-amber-500",
+            charCount > MAX_JD_LENGTH && "text-red-400"
           )}
         >
           {charCount.toLocaleString()} / {MAX_JD_LENGTH.toLocaleString()}
@@ -42,24 +44,24 @@ export function JobDescriptionForm({
         onChange={(e) => onChange(e.target.value.slice(0, MAX_JD_LENGTH))}
         rows={10}
         className={cn(
-          "min-h-[200px] resize-y",
-          (error || isTooShort) && "border-destructive focus-visible:ring-destructive/20"
+          "min-h-[200px] resize-y rounded-2xl border border-white/[0.10] bg-white/[0.01] text-white placeholder-white/20 focus:border-white/20 focus:bg-white/[0.02] focus:ring-1 focus:ring-blue-500/20 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none transition-all duration-300 leading-relaxed font-sans shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]",
+          (error || isTooShort) && "border-red-500/30 focus:border-red-500/40 focus:ring-red-500/10"
         )}
         aria-invalid={!!error || isTooShort}
         aria-describedby="jd-hint"
       />
 
-      <p id="jd-hint" className="text-xs text-muted-foreground">
+      <p id="jd-hint" className="text-xs text-white/40">
         Minimum {MIN_JD_LENGTH} characters recommended.
       </p>
 
       {error && (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="text-sm text-red-400" role="alert">
           {error}
         </p>
       )}
       {!error && isTooShort && (
-        <p className="text-sm text-amber-600 dark:text-amber-400" role="status">
+        <p className="text-sm text-amber-500" role="status">
           Add a bit more detail for accurate keyword matching.
         </p>
       )}
