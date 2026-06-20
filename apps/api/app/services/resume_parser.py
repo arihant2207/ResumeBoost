@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from typing import Any
 
 from google import genai
@@ -10,6 +11,9 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+MAX_RETRIES = 3
+RETRY_DELAYS = [1, 2, 4]  # seconds — exponential backoff
+
 # Fallback regex for basic contact extraction
 EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 PHONE_RE = re.compile(r"\+?[\d][\d\s().-]{8,}\d")
@@ -17,6 +21,24 @@ LINKEDIN_URL_RE = re.compile(r"linkedin\.com/in/([\w\-]+)", re.I)
 LINKEDIN_HANDLE_RE = re.compile(r"\b([a-zA-Z][a-zA-Z0-9]{2,}-[a-zA-Z0-9-]{4,})\b")
 GITHUB_RE = re.compile(r"github\.com/[\w-]+", re.I)
 YEAR_RANGE_RE = re.compile(r"\d{4}\s*[-–|]\s*\d{4}")
+
+# Section headers commonly found in resumes — used by the smart fallback parser
+SECTION_HEADERS = {
+    "experience": [
+        "professional experience", "work experience", "experience",
+        "employment history", "career history",
+    ],
+    "education": ["education", "academic background", "academics"],
+    "projects": ["projects", "personal projects", "academic projects", "key projects"],
+    "skills": ["technical skills", "skills", "core competencies"],
+    "certifications": ["certifications", "certificates", "licenses"],
+    "achievements": [
+        "achievements", "accomplishments", "awards", "honors",
+        "honors and awards", "achievements & awards",
+    ],
+}
+
+_is_section_header_re = re.compile(r"^[A-Z][A-Za-z &/\-]{2,40}$")
 
 PARSE_PROMPT = """You are an expert resume parser. Extract ALL information from the resume text below and return it as a single valid JSON object.
 
@@ -98,6 +120,13 @@ def _extract_json(text: str) -> dict:
     return json.loads(cleaned)
 
 
+def _is_retryable_error(exc: Exception) -> bool:
+    """503 (overloaded) and 429 (rate limit) are worth retrying; other errors are not."""
+    error_str = str(exc).lower()
+    retryable_signals = ["503", "429", "overloaded", "rate limit", "resource exhausted", "unavailable"]
+    return any(signal in error_str for signal in retryable_signals)
+
+
 def _fallback_contact(raw_text: str) -> dict[str, str]:
     """Basic regex contact extraction as fallback."""
     lines = [ln.strip() for ln in raw_text.splitlines() if ln.strip()]
@@ -131,33 +160,194 @@ def _fallback_contact(raw_text: str) -> dict[str, str]:
     return contact
 
 
+def _split_into_sections(raw_text: str) -> dict[str, list[str]]:
+    """
+    Splits resume text into sections by detecting common section header lines
+    (e.g. 'EDUCATION', 'PROJECTS', 'EXPERIENCE'). Returns a dict mapping
+    section key -> list of raw lines belonging to that section.
+    """
+    lines = [ln.rstrip() for ln in raw_text.splitlines()]
+    sections: dict[str, list[str]] = {key: [] for key in SECTION_HEADERS}
+    current_key: str | None = None
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        normalized = stripped.lower().strip(":-• ")
+        matched_key = None
+        for key, headers in SECTION_HEADERS.items():
+            if normalized in headers or any(normalized == h for h in headers):
+                matched_key = key
+                break
+
+        if matched_key:
+            current_key = matched_key
+            continue
+
+        # Treat short, title-cased/uppercase standalone lines as a possible
+        # unrecognised section header — stop appending to the previous section.
+        if _is_section_header_re.match(stripped) and stripped.isupper() and len(stripped.split()) <= 5:
+            if not matched_key:
+                current_key = None
+            continue
+
+        if current_key:
+            sections[current_key].append(stripped)
+
+    return sections
+
+
+def _lines_to_bullets(lines: list[str], limit: int = 6) -> list[str]:
+    """Converts raw section lines into bullet-like strings, stripping bullet markers."""
+    bullets = []
+    for line in lines:
+        cleaned = re.sub(r"^[•\-\*\u2022]\s*", "", line).strip()
+        if len(cleaned) > 3:
+            bullets.append(cleaned)
+        if len(bullets) >= limit:
+            break
+    return bullets
+
+
+def _smart_fallback_parse(raw_text: str) -> dict[str, Any]:
+    """
+    Section-aware fallback parser used when Gemini is unavailable after retries.
+    Detects common resume section headers and extracts raw line content so the
+    PDF is never fully empty, even without AI assistance.
+    """
+    contact = _fallback_contact(raw_text)
+    sections = _split_into_sections(raw_text)
+
+    education_lines = sections.get("education", [])
+    education = []
+    if education_lines:
+        education.append({
+            "institution": education_lines[0] if education_lines else "",
+            "degree": education_lines[1] if len(education_lines) > 1 else "",
+            "graduation_date": "",
+            "details": education_lines[2:6],
+        })
+
+    projects = []
+    proj_lines = sections.get("projects", [])
+    if proj_lines:
+        projects.append({
+            "name": proj_lines[0] if proj_lines else "",
+            "description": "",
+            "technologies": [],
+            "start_date": "",
+            "end_date": "",
+            "bullets": _lines_to_bullets(proj_lines[1:]),
+        })
+
+    experience = []
+    exp_lines = sections.get("experience", [])
+    if exp_lines:
+        experience.append({
+            "company": exp_lines[0] if exp_lines else "",
+            "title": exp_lines[1] if len(exp_lines) > 1 else "",
+            "location": "",
+            "start_date": "",
+            "end_date": "",
+            "bullets": _lines_to_bullets(exp_lines[2:]),
+        })
+
+    skills_lines = sections.get("skills", [])
+    technical_skills: list[str] = []
+    for line in skills_lines:
+        parts = re.split(r"[,;|•]", line)
+        for part in parts:
+            cleaned = re.sub(r"^[A-Za-z &/]+:\s*", "", part.strip())
+            cleaned = cleaned.strip()
+            if cleaned and len(cleaned) < 40:
+                technical_skills.append(cleaned)
+
+    certifications = _lines_to_bullets(sections.get("certifications", []), limit=10)
+    achievements = _lines_to_bullets(sections.get("achievements", []), limit=10)
+
+    logger.info(
+        "Smart fallback parser extracted: education=%d projects=%d experience=%d "
+        "skills=%d certifications=%d achievements=%d",
+        len(education), len(projects), len(experience),
+        len(technical_skills), len(certifications), len(achievements),
+    )
+
+    return {
+        "contact": contact,
+        "summary": "",
+        "experience": experience,
+        "education": education,
+        "skills": {"technical": technical_skills, "soft": []},
+        "projects": projects,
+        "certifications": certifications,
+        "achievements": achievements,
+    }
+
+
+def _call_gemini_parse_with_retry(prompt: str) -> str:
+    """
+    Calls Gemini for resume parsing with exponential backoff retry on
+    transient errors (503, 429). Raises the last exception if all attempts fail.
+    """
+    client = genai.Client(api_key=settings.gemini_api_key)
+    last_exc: Exception | None = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = client.models.generate_content(
+                model=settings.gemini_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                    max_output_tokens=4096,
+                ),
+            )
+            raw_output = response.text
+            if not raw_output or not raw_output.strip():
+                raise ValueError("Empty response from Gemini")
+
+            logger.info("AI resume parsing succeeded on attempt=%d", attempt)
+            return raw_output
+
+        except Exception as exc:
+            last_exc = exc
+
+            if not _is_retryable_error(exc):
+                logger.warning("Resume parsing non-retryable error: %s", exc)
+                raise
+
+            if attempt < MAX_RETRIES:
+                delay = RETRY_DELAYS[attempt - 1]
+                logger.warning(
+                    "Resume parsing transient error attempt=%d/%d — retrying in %ds. Error: %s",
+                    attempt, MAX_RETRIES, delay, exc,
+                )
+                time.sleep(delay)
+            else:
+                logger.error(
+                    "Resume parsing failed after %d attempts. Last error: %s",
+                    MAX_RETRIES, exc,
+                )
+
+    raise last_exc  # type: ignore[misc]
+
+
 def parse_resume_structure(raw_text: str) -> dict[str, Any]:
     """
     AI-powered resume parser using Gemini.
     Works with any resume format/template.
-    Falls back to regex-based parsing if AI call fails.
+    Retries on transient Gemini errors (503/429) before falling back to a
+    section-aware regex parser if AI remains unavailable.
     """
     if not settings.gemini_api_key:
         logger.warning("GEMINI_API_KEY not set — using fallback parser.")
-        return _fallback_parse(raw_text)
+        return _smart_fallback_parse(raw_text)
 
     try:
-        client = genai.Client(api_key=settings.gemini_api_key)
         prompt = PARSE_PROMPT.replace("{resume_text}", raw_text.strip())
-
-        response = client.models.generate_content(
-            model=settings.gemini_model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.0,
-                max_output_tokens=4096,
-            ),
-        )
-
-        raw_output = response.text
-        if not raw_output or not raw_output.strip():
-            raise ValueError("Empty response from Gemini")
-
+        raw_output = _call_gemini_parse_with_retry(prompt)
         parsed = _extract_json(raw_output)
 
         # Ensure all required keys exist
@@ -192,21 +382,5 @@ def parse_resume_structure(raw_text: str) -> dict[str, Any]:
         return parsed
 
     except Exception as exc:
-        logger.warning("AI resume parsing failed (%s) — using fallback parser.", exc)
-        return _fallback_parse(raw_text)
-
-
-def _fallback_parse(raw_text: str) -> dict[str, Any]:
-    """Simple regex fallback when AI is unavailable."""
-    logger.info("Using fallback regex resume parser.")
-    contact = _fallback_contact(raw_text)
-    return {
-        "contact": contact,
-        "summary": "",
-        "experience": [],
-        "education": [],
-        "skills": {"technical": [], "soft": []},
-        "projects": [],
-        "certifications": [],
-        "achievements": [],
-    }
+        logger.warning("AI resume parsing failed after retries (%s) — using smart fallback parser.", exc)
+        return _smart_fallback_parse(raw_text)
