@@ -17,12 +17,25 @@ class OptimizedExperience(BaseModel):
     bullets: list[str] = Field(default_factory=list, description="MNC-style bullet points")
 
 
+class SkillCategory(BaseModel):
+    label: str = Field(..., description="Category label, e.g. 'Languages', 'AI/ML'")
+    skills: list[str] = Field(default_factory=list, description="Skills under this category")
+
+
 class OptimizedSkills(BaseModel):
+    categories: list[SkillCategory] = Field(
+        default_factory=list,
+        description="Skills grouped into categories like Languages, AI/ML, Frameworks, etc.",
+    )
     technical: list[str] = Field(default_factory=list)
     soft: list[str] = Field(default_factory=list)
 
 
 class OptimizeSessionResponse(BaseModel):
+    role_titles: list[str] = Field(
+        default_factory=list,
+        description="2-3 role titles based on candidate's skills and the job description",
+    )
     optimized_summary: str = Field(..., description="Optimized professional summary.")
     optimized_projects: list[OptimizedProject] = Field(default_factory=list)
     optimized_experience: list[OptimizedExperience] = Field(default_factory=list)

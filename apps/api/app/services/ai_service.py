@@ -281,7 +281,7 @@ def optimize_resume_for_job(
     raw_output = _call_gemini_with_retry(
         client=client,
         prompt=prompt,
-        temperature=0.4,
+        temperature=0.15,
         session_id=session_id,
         operation="optimization",
     )
