@@ -71,11 +71,14 @@ export function FileUpload({ value, onChange, error }: FileUploadProps) {
 
   if (value) {
     return (
-      <div className="flex items-center gap-3 rounded-[16px] border border-white/[0.10] bg-white/[0.02] p-4 text-left">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white">
+      <div className="flex items-center gap-3 rounded-[20px] border border-white/[0.10] bg-white/[0.02] backdrop-blur-md p-4 text-left relative overflow-hidden shadow-lg">
+        {/* Subtle blue reflection */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-transparent to-blue-500/[0.012] pointer-events-none" />
+        
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white relative z-10">
           <FileText className="size-5" aria-hidden />
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 relative z-10">
           <p className="truncate font-medium text-sm text-white">{value.name}</p>
           <p className="text-xs text-white/40">
             {formatFileSize(value.size)} ·{" "}
@@ -87,7 +90,7 @@ export function FileUpload({ value, onChange, error }: FileUploadProps) {
           variant="ghost"
           size="icon"
           onClick={() => onChange(null)}
-          className="rounded-full text-white/60 hover:text-white hover:bg-white/5 transition-colors duration-200"
+          className="rounded-full text-white/60 hover:text-white hover:bg-white/5 transition-colors duration-200 relative z-10"
           aria-label="Remove file"
         >
           <X className="size-4" />
@@ -117,9 +120,9 @@ export function FileUpload({ value, onChange, error }: FileUploadProps) {
         className={cn(
           "relative flex cursor-pointer flex-col items-center justify-center rounded-[20px] border border-dashed px-6 py-12 text-center transition-all duration-300 overflow-hidden",
           isDragging
-            ? "border-blue-500/50 bg-blue-500/[0.02] shadow-[0_0_20px_rgba(59,130,246,0.06)]"
-            : "border-white/[0.12] bg-white/[0.01] hover:border-white/20 hover:bg-white/[0.03] hover:shadow-[0_0_30px_rgba(59,130,246,0.04)]",
-          displayError && "border-red-500/30 bg-red-500/[0.01]"
+            ? "border-blue-500/50 bg-blue-500/[0.04] shadow-[0_0_30px_rgba(59,130,246,0.12)]"
+            : "border-white/[0.10] bg-black/40 hover:border-white/20 hover:bg-white/[0.03] hover:shadow-[0_0_30px_rgba(59,130,246,0.08)]",
+          displayError && "border-red-500/30 bg-red-500/[0.02]"
         )}
       >
         <span className="mb-4 flex size-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/90 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">

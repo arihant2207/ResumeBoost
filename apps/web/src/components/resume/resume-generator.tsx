@@ -245,10 +245,21 @@ export function ResumeGenerator() {
               {/* CTA buttons */}
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pt-2">
                 {/* Generate Button Wrapper with Glow */}
-                <div className="relative inline-block w-full sm:w-auto">
-                  <div 
-                    className="absolute inset-0 rounded-full bg-white/25 blur-[36px] opacity-0 transition-opacity duration-500 pointer-events-none"
-                    style={{ opacity: isGenerateHovered && !isProcessing ? 1 : 0 }}
+                <div className="relative inline-flex w-full sm:w-auto">
+                  {/* Ambient radial halo behind button */}
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute left-1/2 top-1/2 -z-10 rounded-full"
+                    style={{
+                      width: "200%",
+                      height: "380%",
+                      transform: `translate(-50%, -50%) scale(${isGenerateHovered && !isProcessing ? 1 : 0.35})`,
+                      opacity: isGenerateHovered && !isProcessing ? 1 : 0,
+                      background:
+                        "radial-gradient(ellipse at center, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 40%, transparent 70%)",
+                      filter: "blur(20px)",
+                      transition: "opacity 0.4s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)",
+                    }}
                   />
                   
                   <Button
@@ -258,13 +269,13 @@ export function ResumeGenerator() {
                     onClick={handleGenerate}
                     onMouseEnter={() => setIsGenerateHovered(true)}
                     onMouseLeave={() => setIsGenerateHovered(false)}
-                    className="relative w-full gap-2 sm:w-auto rounded-full border border-white bg-black hover:bg-black text-white font-medium transition-all duration-300"
+                    className="relative w-full gap-2 sm:w-auto rounded-full border border-white bg-black hover:bg-black text-white font-semibold transition-all duration-300 py-3.5 px-8"
                     style={{
                       transform: isGenerateHovered && !isProcessing ? "scale(1.03)" : "scale(1)",
                       boxShadow: isGenerateHovered && !isProcessing 
-                        ? "0 0 30px rgba(255,255,255,0.25), 0 0 60px rgba(255,255,255,0.1), 0 0 90px rgba(255,255,255,0.05)"
+                        ? "0 0 40px rgba(255,255,255,0.35), 0 0 80px rgba(255,255,255,0.15), 0 0 120px rgba(255,255,255,0.08)"
                         : "none",
-                      transition: "all 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
+                      transition: "box-shadow 0.4s ease, transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
                     }}
                   >
                     {isProcessing ? (
@@ -282,7 +293,7 @@ export function ResumeGenerator() {
                     size="lg"
                     disabled={!isComplete || !pdfBlob}
                     onClick={handleDownload}
-                    className="w-full gap-2 sm:w-auto rounded-full border border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 disabled:opacity-40 disabled:pointer-events-none"
+                    className="w-full gap-2 sm:w-auto rounded-full border border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 disabled:opacity-40 disabled:pointer-events-none py-3.5 px-8 font-semibold"
                   >
                     <Download className="size-4" aria-hidden />
                     Download PDF
@@ -299,7 +310,7 @@ export function ResumeGenerator() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.25 }}
-                    className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-3 text-sm text-emerald-455"
+                    className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-3 text-sm text-emerald-400 font-sans"
                     role="status"
                   >
                     ✅ Resume optimized successfully! Click Download PDF to save.
@@ -344,13 +355,14 @@ export function ResumeGenerator() {
               
               <CardContent className="space-y-6 flex-1 flex flex-col justify-center">
                 {!atsScore && !isProcessing && (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="size-20 rounded-2xl border border-white/10 bg-white/5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)] flex items-center justify-center mb-6 relative">
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="size-16 rounded-2xl border border-white/10 bg-white/5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)] flex items-center justify-center mb-6 relative">
                       <div className="absolute inset-0 rounded-2xl bg-blue-500/5 blur-[8px]" />
-                      <Sparkles className="size-8 text-white z-10" />
+                      <Sparkles className="size-6 text-white z-10" />
                     </div>
-                    <p className="text-sm text-white/50 max-w-[200px] leading-relaxed">
-                      Your ATS score will appear here after analysis
+                    <h3 className="text-base font-semibold text-white tracking-tight mb-2">Awaiting analysis</h3>
+                    <p className="text-sm text-white/50 max-w-[220px] leading-relaxed">
+                      Your ATS score and detailed skill breakdown will appear here.
                     </p>
                   </div>
                 )}

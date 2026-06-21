@@ -44,7 +44,7 @@ export function JobDescriptionForm({
         onChange={(e) => onChange(e.target.value.slice(0, MAX_JD_LENGTH))}
         rows={10}
         className={cn(
-          "min-h-[200px] resize-y rounded-2xl border border-white/[0.10] bg-white/[0.01] text-white placeholder-white/20 focus:border-white/20 focus:bg-white/[0.02] focus:ring-1 focus:ring-blue-500/20 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none transition-all duration-300 leading-relaxed font-sans shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)]",
+          "min-h-[200px] resize-y rounded-2xl border border-white/[0.10] bg-white/[0.02] text-white placeholder-white/30 focus:border-blue-500/30 focus:bg-white/[0.03] focus:shadow-[0_0_20px_rgba(59,130,246,0.15)] focus:ring-1 focus:ring-blue-500/20 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none transition-all duration-300 leading-relaxed font-sans shadow-[inset_0_1px_2px_rgba(0,0,0,0.2)] backdrop-blur-sm",
           (error || isTooShort) && "border-red-500/30 focus:border-red-500/40 focus:ring-red-500/10"
         )}
         aria-invalid={!!error || isTooShort}
