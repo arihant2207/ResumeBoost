@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase";
+import { getDashboardSessions } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,7 @@ import {
   buttonTransition,
 } from "@/components/motion/fade-in";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import type { DashboardSessionResponse } from "@/types/api";
 
 interface ResumeSession {
   id: string;
@@ -36,6 +38,20 @@ interface ResumeSession {
   pdf_url: string | null;
   created_at: string;
   expires_at: string;
+}
+
+function mapToResumeSession(s: DashboardSessionResponse): ResumeSession {
+  return {
+    id: s.id,
+    resume_name: s.resume_name,
+    jd_preview: s.jd_preview,
+    ats_score: s.ats_score ?? 0,
+    matched_skills: s.matched_skills,
+    missing_skills: s.missing_skills,
+    pdf_url: s.pdf_url,
+    created_at: s.created_at,
+    expires_at: s.expires_at ?? s.created_at,
+  };
 }
 
 function getDaysLeft(expiresAt: string): number {
@@ -58,24 +74,32 @@ export default function DashboardPage() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [sessions, setSessions] = useState<ResumeSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
   // Button hover states
   const [isOptHovered, setIsOptHovered] = useState(false);
   const [isEmptyOptHovered, setIsEmptyOptHovered] = useState(false);
 
   useEffect(() => {
-    const getUser = async () => {
+    const getUserAndSessions = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push("/login");
         return;
       }
       setUser(user);
-      // In future: fetch sessions from Supabase DB
-      // For now show empty state
-      setLoading(false);
+
+      try {
+        const dashboardSessions = await getDashboardSessions();
+        setSessions(dashboardSessions.map(mapToResumeSession));
+      } catch (err) {
+        console.error("Dashboard fetch failed:", err);
+        setFetchError(true);
+      } finally {
+        setLoading(false);
+      }
     };
-    getUser();
+    getUserAndSessions();
   }, []);
 
   const handleLogout = async () => {
@@ -119,7 +143,7 @@ export default function DashboardPage() {
               <User className="size-4 text-white/40" />
               <span>{user?.email}</span>
             </div>
-            
+
             <Button
               variant="ghost"
               size="sm"
@@ -146,6 +170,15 @@ export default function DashboardPage() {
             </p>
           </div>
         </FadeInWhenVisible>
+
+        {fetchError && (
+          <div className="mb-8 rounded-[20px] border border-amber-500/20 bg-[#281505]/40 backdrop-blur-md px-5 py-4">
+            <p className="text-sm text-amber-300 flex items-center gap-3">
+              <AlertCircle className="size-5 shrink-0 text-amber-400" />
+              We couldn't load your resume history right now. Please try refreshing the page.
+            </p>
+          </div>
+        )}
 
         {/* Stats — stagger cascade on load */}
         <StaggerContainer className="grid gap-6 sm:grid-cols-3 mb-10">
@@ -199,7 +232,7 @@ export default function DashboardPage() {
                     <Clock className="size-5" />
                   </div>
                   <div>
-                    <p className="text-3xl font-semibold text-white tracking-tight">{5 - sessions.length}</p>
+                    <p className="text-3xl font-semibold text-white tracking-tight">{Math.max(0, 5 - sessions.length)}</p>
                     <p className="text-sm text-white/50 mt-0.5 font-sans">Optimizations left</p>
                   </div>
                 </div>
@@ -220,21 +253,21 @@ export default function DashboardPage() {
                     Upload your resume and paste a job description to get started.
                   </p>
                 </div>
-                
+
                 {/* CTA Glow Button */}
                 <div className="relative inline-block w-full sm:w-auto shrink-0">
-                  <div 
+                  <div
                     className="absolute inset-0 rounded-full bg-white/20 blur-[24px] opacity-0 transition-opacity duration-500 pointer-events-none"
                     style={{ opacity: isOptHovered ? 1 : 0 }}
                   />
-                  <Button 
-                    asChild 
+                  <Button
+                    asChild
                     onMouseEnter={() => setIsOptHovered(true)}
                     onMouseLeave={() => setIsOptHovered(false)}
                     className="relative w-full sm:w-auto rounded-full border border-white bg-black hover:bg-black text-white font-medium transition-all duration-300 py-2.5 px-5"
                     style={{
                       transform: isOptHovered ? "scale(1.03)" : "scale(1)",
-                      boxShadow: isOptHovered 
+                      boxShadow: isOptHovered
                         ? "0 0 20px rgba(255,255,255,0.2), 0 0 40px rgba(255,255,255,0.08)"
                         : "none",
                       transition: "all 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
@@ -265,15 +298,15 @@ export default function DashboardPage() {
                     <div className="absolute inset-0 rounded-2xl bg-blue-500/5 blur-[8px]" />
                     <FileText className="size-8 text-white z-10" />
                   </div>
-                  
+
                   <h3 className="text-xl font-semibold text-white tracking-tight mb-2">No resumes yet</h3>
                   <p className="text-sm text-white/50 mb-8 max-w-sm leading-relaxed">
                     Optimize your first resume and it will appear here with your ATS score and download link.
                   </p>
-                  
+
                   {/* Empty state CTA Button */}
                   <div className="relative">
-                    <div 
+                    <div
                       className="absolute inset-0 rounded-full bg-white/20 blur-[24px] opacity-0 transition-opacity duration-500 pointer-events-none"
                       style={{ opacity: isEmptyOptHovered ? 1 : 0 }}
                     />
@@ -284,7 +317,7 @@ export default function DashboardPage() {
                       className="relative w-full sm:w-auto rounded-full border border-white bg-black hover:bg-black text-white font-medium transition-all duration-300 py-2.5 px-6"
                       style={{
                         transform: isEmptyOptHovered ? "scale(1.03)" : "scale(1)",
-                        boxShadow: isEmptyOptHovered 
+                        boxShadow: isEmptyOptHovered
                           ? "0 0 20px rgba(255,255,255,0.2), 0 0 40px rgba(255,255,255,0.08)"
                           : "none",
                         transition: "all 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
@@ -327,10 +360,12 @@ export default function DashboardPage() {
                             </div>
 
                             {/* JD Preview */}
-                            <p className="text-sm text-white/50 line-clamp-2 leading-relaxed">
-                              <span className="font-semibold text-white/70">JD: </span>
-                              {session.jd_preview}
-                            </p>
+                            {session.jd_preview && (
+                              <p className="text-sm text-white/50 line-clamp-2 leading-relaxed">
+                                <span className="font-semibold text-white/70">JD: </span>
+                                {session.jd_preview}
+                              </p>
+                            )}
 
                             {/* Skills */}
                             <div className="flex flex-wrap gap-1.5 pt-1">
@@ -364,8 +399,8 @@ export default function DashboardPage() {
                           {/* Actions */}
                           <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-start">
                             {session.pdf_url && (
-                              <Button 
-                                size="sm" 
+                              <Button
+                                size="sm"
                                 className="rounded-full border border-white/10 bg-white/5 hover:bg-white/10 text-white gap-2 transition-all duration-300 py-1.5 px-4 font-medium"
                                 asChild
                               >
@@ -409,24 +444,24 @@ export default function DashboardPage() {
 // Simple loader icon placeholder
 function Loader2({ className }: { className?: string }) {
   return (
-    <svg 
-      className={`animate-spin ${className ?? ""}`} 
-      xmlns="http://www.w3.org/2000/svg" 
-      fill="none" 
+    <svg
+      className={`animate-spin ${className ?? ""}`}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
       viewBox="0 0 24 24"
     >
-      <circle 
-        className="opacity-25" 
-        cx="12" 
-        cy="12" 
-        r="10" 
-        stroke="currentColor" 
-        strokeWidth="4" 
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
       />
-      <path 
-        className="opacity-75" 
-        fill="currentColor" 
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" 
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
       />
     </svg>
   );
