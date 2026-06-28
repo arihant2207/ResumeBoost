@@ -92,7 +92,7 @@ def get_dashboard_sessions() -> list[dict]:
         if resume_ids:
             resumes_resp = (
                 client.table("resumes")
-                .select("id, filename, structured_content")
+                .select("id, source_filename")
                 .in_("id", resume_ids)
                 .execute()
             )
@@ -126,13 +126,7 @@ def get_dashboard_sessions() -> list[dict]:
                 except (ValueError, AttributeError):
                     expires_at_str = None
 
-            structured = resume.get("structured_content") or {}
-            contact = structured.get("contact", {}) if isinstance(structured, dict) else {}
-            resume_name = (
-                resume.get("filename")
-                or contact.get("name")
-                or "Untitled resume"
-            )
+            resume_name = resume.get("source_filename") or "Untitled resume"
 
             results.append({
                 "id": session_id,
