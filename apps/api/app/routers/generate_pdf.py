@@ -1,8 +1,9 @@
 import logging
 import re
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Response
 
 from app.schemas.optimization import OptimizeSessionResponse
+from app.services.db_service import save_pdf_to_storage
 from app.services.pdf_service import pdf_service, PDFGenerationError
 from app.services.session_loader import load_session_bundle
 
@@ -20,7 +21,7 @@ router = APIRouter(tags=["pdf"])
         502: {"description": "PDF generation or compilation failures"},
     }
 )
-def generate_pdf(session_id: str) -> Response:
+def generate_pdf(session_id: str, background_tasks: BackgroundTasks) -> Response:
     bundle = load_session_bundle(session_id)
 
     optimized_data = getattr(bundle.session, "optimized_data", None)
@@ -163,6 +164,11 @@ def generate_pdf(session_id: str) -> Response:
             status_code=502,
             detail={"error": {"code": "PDF_GENERATION_FAILED", "message": str(exc)}},
         )
+
+    # Upload to Supabase Storage in the background — does not delay the user's
+    # immediate download. If this fails, the inline download below still works;
+    # only the dashboard's "download again later" link will be unavailable.
+    background_tasks.add_task(save_pdf_to_storage, session_id, pdf_bytes, filename)
 
     return Response(
         content=pdf_bytes,

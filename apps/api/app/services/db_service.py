@@ -20,6 +20,8 @@ from app.services.supabase_client import get_supabase_client
 
 logger = logging.getLogger(__name__)
 
+PDF_BUCKET = "resume-pdfs"
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -147,3 +149,42 @@ def save_ats_score(
         logger.info("Saved ats_score session_id=%s to Supabase", session_id)
     except Exception:
         logger.exception("Failed to save ats_score session_id=%s to Supabase", session_id)
+
+
+# ── PDF storage ────────────────────────────────────────────────────────────────
+
+def save_pdf_to_storage(session_id: str, pdf_bytes: bytes, filename: str) -> str | None:
+    """
+    Uploads the generated PDF to Supabase Storage and updates the
+    optimization_jobs.pdf_url column with the public URL.
+
+    Returns the public URL on success, None on failure. This is best-effort:
+    a failure here must never block the user from downloading their PDF
+    inline in the same request — call this from a BackgroundTask after the
+    response has already been sent.
+    """
+    client = get_supabase_client()
+    if client is None:
+        return None
+
+    try:
+        storage_path = f"{session_id}/{filename}"
+
+        client.storage.from_(PDF_BUCKET).upload(
+            path=storage_path,
+            file=pdf_bytes,
+            file_options={"content-type": "application/pdf", "upsert": "true"},
+        )
+
+        public_url = client.storage.from_(PDF_BUCKET).get_public_url(storage_path)
+
+        client.table("optimization_jobs").update({
+            "pdf_url": public_url,
+        }).eq("session_id", session_id).execute()
+
+        logger.info("Saved PDF to storage session_id=%s url=%s", session_id, public_url)
+        return public_url
+
+    except Exception:
+        logger.exception("Failed to save PDF to storage session_id=%s", session_id)
+        return None

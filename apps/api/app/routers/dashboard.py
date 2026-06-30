@@ -72,7 +72,7 @@ def get_dashboard_sessions() -> list[dict]:
         # Fetch related data in bulk rather than per-session (N+1 avoidance)
         optimization_resp = (
             client.table("optimization_jobs")
-            .select("session_id, result, status, completed_at")
+            .select("session_id, result, status, completed_at, pdf_url")
             .in_("session_id", session_ids)
             .execute()
         )
@@ -136,7 +136,7 @@ def get_dashboard_sessions() -> list[dict]:
                 "matched_skills": ats.get("matched_keywords") or [],
                 "missing_skills": ats.get("missing_keywords") or [],
                 "optimization_status": optimization.get("status"),
-                "pdf_url": None,  # PDFs are generated on-demand, not stored as files
+                "pdf_url": optimization.get("pdf_url"),
                 "created_at": created_at_str,
                 "expires_at": expires_at_str,
             })
