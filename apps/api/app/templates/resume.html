@@ -14,8 +14,11 @@
       box-sizing: border-box;
     }
 
-    body {
+    body, p, ul, li, div, span, a {
       font-family: Arial, Helvetica, sans-serif;
+    }
+
+    body {
       color: #111;
       font-size: 9pt;
       line-height: 1.25;
@@ -30,7 +33,7 @@
 
     .header {
       text-align: center;
-      margin-bottom: 7px;
+      margin-bottom: 8px;
     }
 
     .name {
@@ -38,22 +41,29 @@
       font-weight: bold;
       text-transform: uppercase;
       letter-spacing: 1px;
-      margin-bottom: 2px;
+      margin-bottom: 3px;
     }
 
     .role-titles {
       font-size: 8.5pt;
       color: #444;
-      margin-bottom: 3px;
+      margin-bottom: 4px;
     }
 
     .contact-line {
       font-size: 8pt;
       color: #333;
+      line-height: 1.4;
+      text-align: center;
     }
 
     .contact-line a {
       color: #1a0dab;
+    }
+
+    .contact-item {
+      display: inline-block;
+      white-space: nowrap;
     }
 
     .sep {
@@ -61,8 +71,12 @@
       color: #999;
     }
 
+    .contact-item:first-child .sep {
+      display: none;
+    }
+
     .section {
-      margin-top: 6px;
+      margin-top: 8px;
     }
 
     .section-title {
@@ -84,14 +98,16 @@
     .skills-row {
       font-size: 8.5pt;
       margin-bottom: 2px;
+      page-break-inside: avoid;
     }
 
     .skills-label {
       font-weight: bold;
+      white-space: nowrap;
     }
 
     .exp-item {
-      margin-bottom: 5px;
+      margin-bottom: 6px;
       page-break-inside: avoid;
     }
 
@@ -121,18 +137,20 @@
 
     .bullets {
       margin: 2px 0 0 0;
-      padding-left: 13px;
+      padding-left: 14px;
       list-style-type: disc;
+      list-style-position: outside;
     }
 
     .bullets li {
       font-size: 8.5pt;
-      margin-bottom: 1px;
+      margin-bottom: 2px;
       text-align: justify;
+      page-break-inside: avoid;
     }
 
     .proj-item {
-      margin-bottom: 5px;
+      margin-bottom: 6px;
       page-break-inside: avoid;
     }
 
@@ -160,7 +178,7 @@
     }
 
     .edu-item {
-      margin-bottom: 4px;
+      margin-bottom: 6px;
       page-break-inside: avoid;
     }
 
@@ -182,19 +200,22 @@
 
     .simple-list {
       margin: 2px 0 0 0;
-      padding-left: 13px;
+      padding-left: 14px;
       list-style-type: disc;
+      list-style-position: outside;
     }
 
     .simple-list li {
       font-size: 8.5pt;
-      margin-bottom: 1px;
+      margin-bottom: 2px;
+      page-break-inside: avoid;
     }
 
     .cert-line {
       font-size: 8.5pt;
       margin-bottom: 2px;
       padding-left: 13px;
+      page-break-inside: avoid;
     }
   </style>
 </head>
@@ -208,20 +229,23 @@
     <div class="role-titles">{{ role_titles | join(' • ') }}</div>
     {% endif %}
     <div class="contact-line">
-      {% if contact.email %}<a href="mailto:{{ contact.email }}">{{ contact.email }}</a>{% endif %}
-      {% if contact.phone %}<span class="sep">|</span><span>{{ contact.phone }}</span>{% endif %}
-      {% if contact.location %}<span class="sep">|</span><span>{{ contact.location }}</span>{% endif %}
+      {% if contact.email %}<span class="contact-item"><a href="mailto:{{ contact.email }}">{{ contact.email }}</a></span>{% endif %}
+      {% if contact.phone %}<span class="contact-item"><span class="sep">|</span>{{ contact.phone }}</span>{% endif %}
+      {% if contact.location %}<span class="contact-item"><span class="sep">|</span>{{ contact.location }}</span>{% endif %}
       {% if contact.linkedin %}
-      <span class="sep">|</span>
-      {% set li_url = contact.linkedin if contact.linkedin.startswith('http') else 'https://' + contact.linkedin %}
-      {% set li_display = contact.linkedin.replace('linkedin.com/in/', '').replace('https://', '').replace('http://',
-      '') %}
-      <a href="{{ li_url }}">{{ li_display }}</a>
+      <span class="contact-item">
+        <span class="sep">|</span>
+        {% set li_url = contact.linkedin if contact.linkedin.startswith('http') else 'https://' + contact.linkedin %}
+        {% set li_display = contact.linkedin.replace('linkedin.com/in/', '').replace('https://', '').replace('http://', '') %}
+        <a href="{{ li_url }}">{{ li_display }}</a>
+      </span>
       {% endif %}
       {% if contact.github %}
-      <span class="sep">|</span>
-      {% set gh_url = contact.github if contact.github.startswith('http') else 'https://' + contact.github %}
-      <a href="{{ gh_url }}">GitHub</a>
+      <span class="contact-item">
+        <span class="sep">|</span>
+        {% set gh_url = contact.github if contact.github.startswith('http') else 'https://' + contact.github %}
+        <a href="{{ gh_url }}">GitHub</a>
+      </span>
       {% endif %}
     </div>
   </div>

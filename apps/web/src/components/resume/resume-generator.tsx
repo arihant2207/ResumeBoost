@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { Loader2, Sparkles, Download, CheckCircle2 } from "lucide-react";
+import { useCallback, useState, useEffect, useRef } from "react";
+import { Loader2, Sparkles, Download, CheckCircle2, AlertCircle, Lightbulb, ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
@@ -54,8 +54,27 @@ export function ResumeGenerator() {
   const [atsScore, setAtsScore] = useState<AtsAnalysisResponse | null>(null);
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   
+  // Retry and Countdown states
+  const [failedStep, setFailedStep] = useState<Step | null>(null);
+  const [autoRetry, setAutoRetry] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Show All toggles for ATS UI
+  const [showAllMissing, setShowAllMissing] = useState(false);
+  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
+
   // Hover state for Generate button
   const [isGenerateHovered, setIsGenerateHovered] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+    };
+  }, []);
 
   const validate = useCallback((): boolean => {
     let valid = true;
@@ -77,42 +96,94 @@ export function ResumeGenerator() {
     return valid;
   }, [resume, jobDescription]);
 
-  const handleGenerate = async () => {
-    if (!validate() || !resume) return;
-
+  const runFlow = async (startFrom: Step, currentAttempts = 0) => {
+    if (!resume) return;
     setApiError(null);
+    setFailedStep(null);
+    setCountdown(null);
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+
+    let activeStep: Step = startFrom;
+    try {
+      let currentSession = session;
+
+      if (startFrom === "uploading" || !currentSession) {
+        activeStep = "uploading";
+        setStep("uploading");
+        currentSession = await processResumeAndJobDescription(
+          resume.file,
+          jobDescription.trim()
+        );
+        setSession(currentSession);
+      }
+
+      if (startFrom === "uploading" || startFrom === "analyzing" || !atsScore) {
+        activeStep = "analyzing";
+        setStep("analyzing");
+        const analysis = await analyzeSession(currentSession.id);
+        setAtsScore(analysis);
+      }
+
+      if (startFrom === "uploading" || startFrom === "analyzing" || startFrom === "optimizing") {
+        activeStep = "optimizing";
+        setStep("optimizing");
+        await optimizeSession(currentSession.id);
+      }
+
+      if (startFrom === "uploading" || startFrom === "analyzing" || startFrom === "optimizing" || startFrom === "generating") {
+        activeStep = "generating";
+        setStep("generating");
+        const blob = await downloadPdf(currentSession.id);
+        setPdfBlob(blob);
+      }
+
+      setStep("complete");
+      setRetryCount(0);
+    } catch (err) {
+      console.error("Error running flow step:", activeStep, err);
+      const errMsg = err instanceof ApiError ? err.message : "Something went wrong. Please try again.";
+
+      if (autoRetry && currentAttempts < 3) {
+        setRetryCount(currentAttempts + 1);
+        setStep("idle");
+        setFailedStep(activeStep);
+        setApiError(errMsg);
+
+        let count = 5;
+        setCountdown(count);
+        countdownIntervalRef.current = setInterval(() => {
+          count -= 1;
+          if (count <= 0) {
+            if (countdownIntervalRef.current) {
+              clearInterval(countdownIntervalRef.current);
+              countdownIntervalRef.current = null;
+            }
+            setCountdown(null);
+            runFlow(activeStep, currentAttempts + 1);
+          } else {
+            setCountdown(count);
+          }
+        }, 1000);
+      } else {
+        setStep("idle");
+        setFailedStep(activeStep);
+        setApiError(errMsg);
+      }
+    }
+  };
+
+  const handleGenerate = () => {
+    if (!validate() || !resume) return;
     setSession(null);
     setAtsScore(null);
     setPdfBlob(null);
-
-    try {
-      setStep("uploading");
-      const result = await processResumeAndJobDescription(
-        resume.file,
-        jobDescription.trim()
-      );
-      setSession(result);
-
-      setStep("analyzing");
-      const analysis = await analyzeSession(result.id);
-      setAtsScore(analysis);
-
-      setStep("optimizing");
-      await optimizeSession(result.id);
-
-      setStep("generating");
-      const blob = await downloadPdf(result.id);
-      setPdfBlob(blob);
-
-      setStep("complete");
-    } catch (err) {
-      setStep("idle");
-      if (err instanceof ApiError) {
-        setApiError(err.message);
-      } else {
-        setApiError("Something went wrong. Please try again.");
-      }
-    }
+    setRetryCount(0);
+    setShowAllMissing(false);
+    setShowAllSuggestions(false);
+    runFlow("uploading");
   };
 
   const handleDownload = () => {
@@ -130,6 +201,17 @@ export function ResumeGenerator() {
   const isProcessing = !["idle", "complete"].includes(step);
   const isComplete = step === "complete";
   const currentStepIndex = STEPS.findIndex((st) => st.key === step);
+
+  const getStepLabel = (key: Step, defaultLabel: string) => {
+    if (step !== key) return defaultLabel;
+    switch (key) {
+      case "uploading": return "Uploading your resume...";
+      case "analyzing": return "Analyzing your resume against the job description...";
+      case "optimizing": return "AI is rewriting your resume bullets...";
+      case "generating": return "Generating your PDF...";
+      default: return defaultLabel;
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -162,6 +244,16 @@ export function ResumeGenerator() {
                     setSession(null);
                     setStep("idle");
                     setPdfBlob(null);
+                    setFailedStep(null);
+                    setApiError(null);
+                    setRetryCount(0);
+                    setCountdown(null);
+                    setShowAllMissing(false);
+                    setShowAllSuggestions(false);
+                    if (countdownIntervalRef.current) {
+                      clearInterval(countdownIntervalRef.current);
+                      countdownIntervalRef.current = null;
+                    }
                   }}
                   error={resumeError}
                 />
@@ -216,7 +308,14 @@ export function ResumeGenerator() {
                                 : "text-white/40"
                             }`}
                           >
-                            {s.label}
+                            {getStepLabel(s.key, s.label)}
+                            {isCurrent && (
+                              <span className="inline-flex items-center">
+                                <span className="animate-pulse bg-blue-400 size-1 rounded-full ml-1.5 inline-block" />
+                                <span className="animate-pulse bg-blue-400 size-1 rounded-full ml-1 inline-block [animation-delay:0.2s]" />
+                                <span className="animate-pulse bg-blue-400 size-1 rounded-full ml-1 inline-block [animation-delay:0.4s]" />
+                              </span>
+                            )}
                           </span>
                         </motion.div>
                       );
@@ -228,19 +327,70 @@ export function ResumeGenerator() {
               {/* API error banner — AnimatePresence for smooth appear/disappear */}
               <AnimatePresence mode="wait">
                 {apiError && (
-                  <motion.p
+                  <motion.div
                     key="error"
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.2 }}
-                    className="rounded-xl border border-red-500/20 bg-red-500/[0.04] px-4 py-3 text-sm text-red-400"
+                    className="rounded-2xl border border-red-500/20 bg-red-500/[0.03] backdrop-blur-md p-5 text-left relative overflow-hidden"
                     role="alert"
                   >
-                    {apiError}
-                  </motion.p>
+                    <div className="flex items-start gap-4">
+                      <div className="size-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 shrink-0">
+                        <AlertCircle className="size-5" />
+                      </div>
+                      <div className="space-y-1.5 flex-1">
+                        <h4 className="text-base font-semibold text-white tracking-tight">AI is temporarily busy</h4>
+                        <p className="text-sm text-white/70 leading-relaxed">
+                          Google's AI servers are under high load. This is temporary — please wait a few seconds and try again.
+                        </p>
+                        <p className="text-xs text-red-400/80">
+                          Error detail: {apiError}
+                        </p>
+                        {countdown !== null ? (
+                          <p className="text-xs font-semibold text-blue-400 animate-pulse pt-1">
+                            Auto-retrying in {countdown}s... (Attempt {retryCount}/3)
+                          </p>
+                        ) : (
+                          <p className="text-xs text-white/40 pt-1">
+                            Usually resolves in 10-30 seconds.
+                          </p>
+                        )}
+                        
+                        {countdown === null && (
+                          <div className="flex gap-3 pt-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => runFlow(failedStep || "uploading")}
+                              className="rounded-full border border-white/20 bg-white/5 hover:bg-white/10 text-white px-4 py-1.5 text-xs font-semibold transition-all duration-300"
+                            >
+                              Try Again
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* Auto-retry option */}
+              {!isProcessing && !isComplete && (
+                <div className="flex items-center gap-2 select-none pt-2 text-white/60 hover:text-white/80 transition-colors duration-300">
+                  <input
+                    type="checkbox"
+                    id="auto-retry"
+                    checked={autoRetry}
+                    onChange={(e) => setAutoRetry(e.target.checked)}
+                    className="size-4 rounded border-white/20 bg-white/5 checked:bg-blue-500 accent-blue-500 cursor-pointer"
+                  />
+                  <label htmlFor="auto-retry" className="text-xs font-medium cursor-pointer">
+                    Auto-retry if AI is busy (up to 3 times)
+                  </label>
+                </div>
+              )}
 
               {/* CTA buttons */}
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pt-2">
@@ -329,22 +479,8 @@ export function ResumeGenerator() {
 
             <div className="relative z-10 flex-1 flex flex-col">
               <CardHeader>
-                <CardTitle className="flex items-center justify-between text-xl font-semibold text-white tracking-tight">
+                <CardTitle className="text-xl font-semibold text-white tracking-tight">
                   ATS Score
-                  {atsScore && (
-                    <Badge
-                      variant={
-                        atsScore.match_percentage >= 70
-                          ? "default"
-                          : atsScore.match_percentage >= 50
-                          ? "secondary"
-                          : "destructive"
-                      }
-                      className="text-lg px-3 py-1 font-semibold rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300"
-                    >
-                      {atsScore.match_percentage}%
-                    </Badge>
-                  )}
                 </CardTitle>
                 <CardDescription className="text-sm text-white/50">
                   {atsScore
@@ -376,74 +512,125 @@ export function ResumeGenerator() {
 
                 {atsScore && (
                   <div className="space-y-6 text-left w-full">
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-white/60">Match score</span>
-                        <span className="font-semibold text-white">{atsScore.match_percentage}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-white/5 overflow-hidden border border-white/5">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${
-                            atsScore.match_percentage >= 70
-                              ? "bg-emerald-500"
-                              : atsScore.match_percentage >= 50
-                              ? "bg-yellow-500"
-                              : "bg-red-500"
-                          }`}
-                          style={{ width: `${atsScore.match_percentage}%` }}
-                        />
-                      </div>
-                    </div>
+                    {/* Section A — Score ring */}
+                    <ScoreRing value={atsScore.match_percentage} />
 
-                    {atsScore.matched_skills.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-sm font-semibold text-emerald-400">
-                          ✅ Matched Skills
-                        </p>
+                    {/* Section B — Matched Skills */}
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <p className="font-semibold text-emerald-400">✅ Matched Skills</p>
+                        <span className="text-white/40 font-medium">
+                          {atsScore.matched_skills.length} of {atsScore.matched_skills.length + atsScore.missing_skills.length} required matched
+                        </span>
+                      </div>
+                      {atsScore.matched_skills.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
                           {atsScore.matched_skills.map((skill) => (
                             <Badge
                               key={skill}
                               variant="secondary"
-                              className="text-xs bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-medium"
+                              className="text-[11px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-medium rounded-full py-0.5 px-2.5"
                             >
                               {skill}
                             </Badge>
                           ))}
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <p className="text-xs text-white/40 italic">No skills matched.</p>
+                      )}
+                    </div>
 
-                    {atsScore.missing_skills.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-sm font-semibold text-red-400">
-                          ❌ Missing Skills
+                    {/* Section C — Missing Skills */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-red-400">❌ Missing Skills</p>
+                      {atsScore.missing_skills.length > 0 ? (
+                        <>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(showAllMissing ? atsScore.missing_skills : atsScore.missing_skills.slice(0, 5)).map((skill) => (
+                              <Badge
+                                key={skill}
+                                variant="secondary"
+                                className="text-[11px] bg-red-500/10 border border-red-500/20 text-red-300 font-medium rounded-full py-0.5 px-2.5"
+                              >
+                                {skill}
+                              </Badge>
+                            ))}
+                          </div>
+                          {atsScore.missing_skills.length > 5 && (
+                            <button
+                              type="button"
+                              onClick={() => setShowAllMissing(!showAllMissing)}
+                              className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1 mt-1 cursor-pointer"
+                            >
+                              {showAllMissing ? (
+                                <><ChevronUp className="size-3" /> Show less</>
+                              ) : (
+                                <><ChevronDown className="size-3" /> Show all {atsScore.missing_skills.length}</>
+                              )}
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-xs text-white/40 italic">No missing skills.</p>
+                      )}
+                    </div>
+
+                    {/* Section D — AI Suggestions */}
+                    {atsScore.improvement_suggestions && atsScore.improvement_suggestions.length > 0 && (
+                      <div className="space-y-3 pt-2">
+                        <p className="text-xs font-semibold text-white/80 flex items-center gap-1.5">
+                          <Lightbulb className="size-4 text-amber-400" />
+                          How to improve your score
                         </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {atsScore.missing_skills.map((skill) => (
-                            <Badge
-                              key={skill}
-                              variant="secondary"
-                              className="text-xs bg-red-500/10 border border-red-500/20 text-red-300 font-medium"
+                        <div className="space-y-2">
+                          {(showAllSuggestions ? atsScore.improvement_suggestions : atsScore.improvement_suggestions.slice(0, 3)).map((s, i) => (
+                            <div
+                              key={i}
+                              className="rounded-xl border border-white/[0.06] bg-white/[0.01] p-3 text-[11px] text-white/70 leading-relaxed flex gap-2 items-start"
                             >
-                              {skill}
-                            </Badge>
+                              <span className="shrink-0 size-4 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-[9px]">
+                                {i + 1}
+                              </span>
+                              <span>{s}</span>
+                            </div>
                           ))}
                         </div>
+                        {atsScore.improvement_suggestions.length > 3 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllSuggestions(!showAllSuggestions)}
+                            className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1 mt-1 cursor-pointer"
+                          >
+                            {showAllSuggestions ? (
+                              <><ChevronUp className="size-3" /> Show less</>
+                            ) : (
+                              <><ChevronDown className="size-3" /> Show all {atsScore.improvement_suggestions.length}</>
+                            )}
+                          </button>
+                        )}
                       </div>
                     )}
 
-                    {atsScore.improvement_suggestions.length > 0 && (
+                    {/* Section E — Key ATS Keywords */}
+                    {atsScore.ats_keywords && atsScore.ats_keywords.length > 0 && (
                       <div className="space-y-2 pt-2">
-                        <p className="text-sm font-semibold text-white/80">💡 Suggestions</p>
-                        <ul className="space-y-2">
-                          {atsScore.improvement_suggestions.slice(0, 3).map((s, i) => (
-                            <li key={i} className="text-xs text-white/50 flex gap-2 leading-relaxed">
-                              <span className="shrink-0 text-blue-400">•</span>
-                              <span>{s}</span>
-                            </li>
+                        <div>
+                          <p className="text-xs font-semibold text-blue-400">🔑 High-value keywords to include</p>
+                          <p className="text-[10px] text-white/40 mt-0.5 leading-normal">
+                            Consider naturally incorporating these keywords from the job description into your resume
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {atsScore.ats_keywords.map((keyword) => (
+                            <Badge
+                              key={keyword}
+                              variant="secondary"
+                              className="text-[11px] bg-blue-500/10 border border-blue-500/20 text-blue-300 font-medium rounded-full py-0.5 px-2.5"
+                            >
+                              {keyword}
+                            </Badge>
                           ))}
-                        </ul>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -452,6 +639,44 @@ export function ResumeGenerator() {
             </div>
           </Card>
         </FadeIn>
+      </div>
+    </div>
+  );
+}
+
+function ScoreRing({ value }: { value: number }) {
+  const circumference = 2 * Math.PI * 34; // radius = 34
+  const offset = circumference - (value / 100) * circumference;
+  const colorClass = value >= 70 ? "text-emerald-500" : value >= 50 ? "text-yellow-500" : "text-red-500";
+
+  return (
+    <div className="relative flex size-24 shrink-0 items-center justify-center mx-auto mb-2">
+      <svg className="size-24 -rotate-90" viewBox="0 0 80 80" aria-hidden>
+        <circle
+          cx="40"
+          cy="40"
+          r="34"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="6"
+          className="text-white/[0.04]"
+        />
+        <circle
+          cx="40"
+          cy="40"
+          r="34"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          className={`${colorClass} transition-all duration-1000 ease-out`}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-xl font-bold text-white tracking-tight">{value}%</span>
+        <span className="text-[9px] text-white/40 font-semibold uppercase tracking-wider">Match</span>
       </div>
     </div>
   );

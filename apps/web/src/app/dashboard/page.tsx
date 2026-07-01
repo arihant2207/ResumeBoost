@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   LogOut, Sparkles, Clock, Download,
-  Trash2, User, ChevronRight, AlertCircle, FileText
+  Trash2, User, ChevronRight, AlertCircle, FileText,
+  ChevronDown, ChevronUp
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase";
 import { getDashboardSessions } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,11 @@ interface ResumeSession {
   pdf_url: string | null;
   created_at: string;
   expires_at: string;
+  optimization_result?: {
+    optimized_summary?: string | null;
+    role_titles?: string[] | null;
+    skills?: string[] | null;
+  } | null;
 }
 
 function mapToResumeSession(s: DashboardSessionResponse): ResumeSession {
@@ -51,6 +57,7 @@ function mapToResumeSession(s: DashboardSessionResponse): ResumeSession {
     pdf_url: s.pdf_url,
     created_at: s.created_at,
     expires_at: s.expires_at ?? s.created_at,
+    optimization_result: s.optimization_result,
   };
 }
 
@@ -79,6 +86,16 @@ export default function DashboardPage() {
   // Button hover states
   const [isOptHovered, setIsOptHovered] = useState(false);
   const [isEmptyOptHovered, setIsEmptyOptHovered] = useState(false);
+
+  // Card details expand states
+  const [expandedSessions, setExpandedSessions] = useState<Record<string, boolean>>({});
+
+  const toggleExpandSession = (id: string) => {
+    setExpandedSessions(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
 
   useEffect(() => {
     const getUserAndSessions = async () => {
@@ -398,6 +415,20 @@ export default function DashboardPage() {
 
                           {/* Actions */}
                           <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-start">
+                            {session.optimization_result && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="rounded-full text-blue-400 hover:text-blue-300 hover:bg-white/5 gap-1 transition-all duration-300 py-1.5 px-3.5 font-medium"
+                                onClick={() => toggleExpandSession(session.id)}
+                              >
+                                {expandedSessions[session.id] ? (
+                                  <><ChevronUp className="size-4" /> Details</>
+                                ) : (
+                                  <><ChevronDown className="size-4" /> Details</>
+                                )}
+                              </Button>
+                            )}
                             {session.pdf_url && (
                               <Button
                                 size="sm"
@@ -420,6 +451,58 @@ export default function DashboardPage() {
                             </Button>
                           </div>
                         </div>
+
+                        <AnimatePresence initial={false}>
+                          {expandedSessions[session.id] && session.optimization_result && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                              animate={{ height: "auto", opacity: 1, marginTop: 16 }}
+                              exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                              className="overflow-hidden border-t border-white/[0.06] pt-4 space-y-4"
+                            >
+                              {/* Summary */}
+                              {session.optimization_result.optimized_summary && (
+                                <div className="space-y-1">
+                                  <h4 className="text-xs font-semibold text-white/50 uppercase tracking-wider">Optimized Summary</h4>
+                                  <p className="text-sm text-white/60 leading-relaxed font-sans">
+                                    {session.optimization_result.optimized_summary}
+                                  </p>
+                                </div>
+                              )}
+
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                {/* Role Titles */}
+                                {session.optimization_result.role_titles && session.optimization_result.role_titles.length > 0 && (
+                                  <div className="space-y-1.5">
+                                    <h4 className="text-xs font-semibold text-white/50 uppercase tracking-wider">Target Role Titles</h4>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {session.optimization_result.role_titles.map(role => (
+                                        <Badge key={role} variant="secondary" className="text-xs bg-blue-500/10 border border-blue-500/20 text-blue-300 font-medium">
+                                          {role}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Top Skills */}
+                                {session.optimization_result.skills && session.optimization_result.skills.length > 0 && (
+                                  <div className="space-y-1.5">
+                                    <h4 className="text-xs font-semibold text-white/50 uppercase tracking-wider">Top Skills</h4>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {session.optimization_result.skills.slice(0, 8).map(skill => (
+                                        <Badge key={skill} variant="secondary" className="text-xs bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-medium">
+                                          {skill}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </CardContent>
                     </Card>
                   </FadeInWhenVisible>

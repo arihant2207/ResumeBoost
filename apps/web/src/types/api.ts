@@ -69,4 +69,9 @@ export interface DashboardSessionResponse {
   pdf_url: string | null;
   created_at: string;
   expires_at?: string | null;
+  optimization_result?: {
+    optimized_summary?: string | null;
+    role_titles?: string[] | null;
+    skills?: string[] | null;
+  } | null;
 }

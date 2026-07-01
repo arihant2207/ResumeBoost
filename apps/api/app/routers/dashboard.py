@@ -116,6 +116,20 @@ def get_dashboard_sessions() -> list[dict]:
 
             resume_name = session.get("resume_name") or "Untitled resume"
 
+            result_json = optimization.get("result") or {}
+            opt_result = None
+            if result_json:
+                skills_tech = []
+                skills_block = result_json.get("optimized_skills") or {}
+                if isinstance(skills_block, dict):
+                    skills_tech = skills_block.get("technical") or []
+
+                opt_result = {
+                    "optimized_summary": result_json.get("optimized_summary"),
+                    "role_titles": result_json.get("role_titles"),
+                    "skills": skills_tech,
+                }
+
             results.append({
                 "id": session_id,
                 "resume_name": resume_name,
@@ -125,6 +139,7 @@ def get_dashboard_sessions() -> list[dict]:
                 "missing_skills": ats.get("missing_keywords") or [],
                 "optimization_status": optimization.get("status"),
                 "pdf_url": optimization.get("pdf_url"),
+                "optimization_result": opt_result,
                 "created_at": created_at_str,
                 "expires_at": expires_at_str,
             })
