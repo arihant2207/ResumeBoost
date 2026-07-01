@@ -78,6 +78,7 @@ def save_session(session: SessionRecord) -> None:
             "id": session.id,
             "resume_id": session.resume_id,
             "job_description_id": session.job_description_id,
+            "resume_name": session.resume_name,
             "created_at": session.created_at.isoformat(),
         }).execute()
         logger.info("Saved session id=%s to Supabase", session.id)

@@ -57,3 +57,16 @@ export interface ApiErrorBody {
     message?: string;
   };
 }
+
+export interface DashboardSessionResponse {
+  id: string;
+  resume_name: string;
+  jd_preview: string;
+  ats_score: number | null;
+  matched_skills: string[];
+  missing_skills: string[];
+  optimization_status?: string | null;
+  pdf_url: string | null;
+  created_at: string;
+  expires_at?: string | null;
+}

@@ -56,7 +56,7 @@ def get_dashboard_sessions() -> list[dict]:
     try:
         sessions_resp = (
             client.table("sessions")
-            .select("id, resume_id, job_description_id, created_at")
+            .select("id, resume_id, job_description_id, resume_name, created_at")
             .order("created_at", desc=True)
             .limit(RECENT_SESSIONS_LIMIT)
             .execute()
@@ -66,7 +66,6 @@ def get_dashboard_sessions() -> list[dict]:
             return []
 
         session_ids = [s["id"] for s in sessions]
-        resume_ids = list({s["resume_id"] for s in sessions if s.get("resume_id")})
         jd_ids = list({s["job_description_id"] for s in sessions if s.get("job_description_id")})
 
         # Fetch related data in bulk rather than per-session (N+1 avoidance)
@@ -88,16 +87,6 @@ def get_dashboard_sessions() -> list[dict]:
         )
         ats_by_session = {row["session_id"]: row for row in (ats_resp.data or [])}
 
-        resumes_by_id: dict[str, dict] = {}
-        if resume_ids:
-            resumes_resp = (
-                client.table("resumes")
-                .select("id, source_filename")
-                .in_("id", resume_ids)
-                .execute()
-            )
-            resumes_by_id = {row["id"]: row for row in (resumes_resp.data or [])}
-
         jds_by_id: dict[str, dict] = {}
         if jd_ids:
             jds_resp = (
@@ -111,7 +100,6 @@ def get_dashboard_sessions() -> list[dict]:
         results = []
         for session in sessions:
             session_id = session["id"]
-            resume = resumes_by_id.get(session.get("resume_id"), {})
             jd = jds_by_id.get(session.get("job_description_id"), {})
             ats = ats_by_session.get(session_id, {})
             optimization = optimizations_by_session.get(session_id, {})
@@ -126,7 +114,7 @@ def get_dashboard_sessions() -> list[dict]:
                 except (ValueError, AttributeError):
                     expires_at_str = None
 
-            resume_name = resume.get("source_filename") or "Untitled resume"
+            resume_name = session.get("resume_name") or "Untitled resume"
 
             results.append({
                 "id": session_id,

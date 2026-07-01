@@ -32,5 +32,7 @@ class SessionRecord:
     id: str
     resume_id: str
     job_description_id: str
+    resume_name: str | None = None
     created_at: datetime = field(default_factory=utc_now)
     optimized_data: Any = None
+

@@ -31,6 +31,7 @@ def create_session(body: SessionCreate, background_tasks: BackgroundTasks) -> Se
         id=str(uuid.uuid4()),
         resume_id=body.resume_id,
         job_description_id=body.job_description_id,
+        resume_name=resume.filename,
     )
     store.sessions[session.id] = session
 
